@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "voidclient",
+  "version": "${version}",
+  "name": "VOID CLIENT",
+  "description": "Premium purple/black Fabric client: HUD, FPS boost, Crystal & Anchor PvP visuals. Client-side only, no automation.",
+  "authors": ["VOID"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": { "client": ["com.voidclient.VoidClient"] },
+  "mixins": ["voidclient.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.17.0",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "suggests": { "sodium": "*", "entityculling": "*", "immediatelyfast": "*" }
+}
