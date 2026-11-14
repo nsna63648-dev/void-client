@@ -7,7 +7,7 @@ import net.minecraft.block.Blocks;
 import net.minecraft.block.RespawnAnchorBlock;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.option.ParticlesMode;
+import net.minecraft.client.option.ParticleMode;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
@@ -98,7 +98,7 @@ public final class ModuleManager {
         add(new Toggle("sodiumopt", "Sodium Optimization", "ตั้งค่าที่เข้ากับ Sodium (graphics fast, biome blend ต่ำ)", PERFORMANCE, false, on -> {
             if (!on) return;
             var o = MinecraftClient.getInstance().options;
-            o.getGraphicsMode().setValue(net.minecraft.client.option.GraphicsMode.FAST);
+            o.getGraphics().setValue(net.minecraft.client.option.GraphicsMode.FAST);
             o.getBiomeBlendRadius().setValue(1);
         }));
         add(new Toggle("entityculling", "Entity Culling", "ลดระยะ render Entity (แนะนำใช้ร่วมม็อด Entity Culling)", PERFORMANCE, false, on -> {
@@ -106,7 +106,7 @@ public final class ModuleManager {
             if (on) o.getEntityDistanceScaling().setValue(0.6); else o.getEntityDistanceScaling().setValue(1.0);
         }));
         add(new Toggle("particleopt", "Particle Optimization", "ลด Particle ที่ไม่จำเป็น", PERFORMANCE, false, on -> {
-            MinecraftClient.getInstance().options.getParticles().setValue(on ? ParticlesMode.DECREASED : ParticlesMode.ALL);
+            MinecraftClient.getInstance().options.getParticles().setValue(on ? ParticleMode.DECREASED : ParticleMode.ALL);
         }));
         add(new Toggle("dynamicfps", "Dynamic FPS", "ลด FPS ตอนหน้าต่างไม่โฟกัส (ลด CPU/GPU)", PERFORMANCE, false, on -> {
             if (!on) restoreFps(MinecraftClient.getInstance());
@@ -205,7 +205,7 @@ public final class ModuleManager {
                 dmgTicks > 0 ? List.of(String.format("-%.1f", lastDamage)) : List.of());
         add(new Toggle("pvpperf", "PVP Performance", "ลด Particle/เงา ระหว่างสู้เพื่อลด FPS drop", COMBAT, false, on -> {
             var o = MinecraftClient.getInstance().options;
-            o.getParticles().setValue(on ? ParticlesMode.MINIMAL : ParticlesMode.ALL);
+            o.getParticles().setValue(on ? ParticleMode.MINIMAL : ParticleMode.ALL);
             o.getEntityShadows().setValue(!on);
         }));
     }
