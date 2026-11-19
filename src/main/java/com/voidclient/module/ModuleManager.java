@@ -162,3 +162,159 @@ public final class ModuleManager {
         hud("anchorhud", "Anchor HUD", "Respawn Anchor / Glowstone ในกระเป๋า", ANCHOR, false, 260, 96, mc ->
                 List.of("Anchors  " + count(mc, Items.RESPAWN_ANCHOR), "Glowstone  " + count(mc, Items.GLOWSTONE)));
         hud("anchorstatus", "Anchor Status Display", "สถานะ charge ของ Anchor ที่มองอยู่", ANCHOR, false, 260, 126, mc -> {
+        // ---------- COMBAT ----------
+        hud("totem", "Totem Counter", "จำนวน Totem", COMBAT, false, 380, 6, mc -> List.of("Totems  " + count(mc, Items.TOTEM_OF_UNDYING)));
+        hud("health", "Health Display", "เลือด + absorption", COMBAT, false, 380, 24, mc -> mc.player == null ? List.of() :
+                List.of(String.format("HP  %.1f%s", mc.player.getHealth(), mc.player.getAbsorptionAmount() > 0 ? String.format(" + %.1f", mc.player.getAbsorptionAmount()) : "")));
+        hud("target", "Target Information HUD", "ชื่อ/เลือดเป้าหมายที่เล็งอยู่", COMBAT, false, 380, 42, mc -> {
+            if (mc.targetedEntity instanceof LivingEntity le)
+                return List.of(le.getName().getString(), String.format("HP  %.1f / %.1f", le.getHealth(), le.getMaxHealth()));
+            return List.of();
+        });
+        hud("combattimer", "Combat Timer", "ตัวจับเวลาหลังสู้", COMBAT, false, 380, 72, mc ->
+                combatTicks > 0 ? List.of(String.format("Combat  %.1fs", combatTicks / 20f)) : List.of());
+        hud("cooldown", "Item Cooldown Display", "คูลดาวน์ Pearl / Gapple / Shield", COMBAT, false, 380, 90, mc -> {
+            if (mc.player == null) return List.of();
+            List<String> out = new ArrayList<>();
+            Item[] items = {Items.ENDER_PEARL, Items.GOLDEN_APPLE, Items.ENCHANTED_GOLDEN_APPLE, Items.CHORUS_FRUIT, Items.SHIELD};
+            for (Item it : items) {
+                float p = mc.player.getItemCooldownManager().getCooldownProgress(new ItemStack(it), 0f);
+                if (p > 0f) out.add(new ItemStack(it).getName().getString() + "  " + Math.round(p * 100) + "%");
+            }
+            return out;
+        });
+        hud("enchants", "Enchantment Display", "เอนชานต์ของไอเทมในมือ", COMBAT, false, 380, 120, mc -> {
+            if (mc.player == null) return List.of();
+            List<String> out = new ArrayList<>();
+            for (var e : mc.player.getMainHandStack().getEnchantments().getEnchantmentEntries())
+                out.add(Enchantment.getName(e.getKey(), e.getIntValue()).getString());
+            return out;
+        });
+        hud("nearby", "Surrounding Entity Counter", "จำนวน Entity รอบตัว 16 บล็อก", COMBAT, false, 380, 190, mc ->
+                List.of("Nearby  " + nearby));
+        hud("dmgind", "Custom Damage Indicators", "ตัวเลขดาเมจที่ได้รับ", COMBAT, false, 380, 208, mc ->
+                dmgTicks > 0 ? List.of(String.format("-%.1f", lastDamage)) : List.of());
+        add(new Toggle("pvpperf", "PVP Performance", "ลด Particle/เงา ระหว่างสู้เพื่อลด FPS drop", COMBAT, false, on -> {
+            var o = MinecraftClient.getInstance().options;
+            o.getParticles().setValue(on ? ParticlesMode.MINIMAL : ParticlesMode.ALL);
+            o.getEntityShadows().setValue(!on);
+        }));
+    }
+
+    // ---------- runtime ----------
+    public static void tick(MinecraftClient mc) {
+        boolean inWorld = mc.world != null;
+        if (wasInWorld && !inWorld && memoryOpt != null && memoryOpt.enabled()) System.gc();
+        wasInWorld = inWorld;
+
+        for (Module m : ALL) if (m.enabled()) {
+            try { m.tick(mc); } catch (Throwable t) { System.err.println("[VOID] tick error in " + m.id + ": " + t); }
+        }
+        PlayerEntity p = mc.player;
+        if (p == null || mc.world == null) { prevHealth = -1f; return; }
+
+        float hp = p.getHealth() + p.getAbsorptionAmount();
+        if (prevHealth >= 0 && hp < prevHealth) { lastDamage = prevHealth - hp; dmgTicks = 60; combatTicks = 200; }
+        prevHealth = hp;
+        if (p.hurtTime > 0) combatTicks = 200;
+        if (mc.options.attackKey.isPressed() && mc.targetedEntity instanceof LivingEntity) combatTicks = 200;
+        if (combatTicks > 0) combatTicks--;
+        if (dmgTicks > 0) dmgTicks--;
+        if (p.age % 10 == 0)
+            nearby = mc.world.getEntitiesByClass(LivingEntity.class, p.getBoundingBox().expand(16), e -> e != p).size();
+    }
+
+    public static void renderHud(DrawContext c, MinecraftClient mc) {
+        if (mc.player == null) return;
+        pollClicks(mc);
+        for (Module m : ALL) if (m.enabled()) {
+            try { m.render(c, mc); } catch (Throwable t) { System.err.println("[VOID] render error in " + m.id + ": " + t); }
+        }
+    }
+
+    private static void pollClicks(MinecraftClient mc) {
+        if (mc.currentScreen != null) { wasL = wasR = false; return; }
+        long win = mc.getWindow().getHandle(), now = System.currentTimeMillis();
+        boolean l = GLFW.glfwGetMouseButton(win, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
+        boolean r = GLFW.glfwGetMouseButton(win, GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS;
+        if (l && !wasL) LMB.add(now);
+        if (r && !wasR) RMB.add(now);
+        wasL = l; wasR = r;
+    }
+
+    public static int cps(ArrayDeque<Long> q) {
+        long now = System.currentTimeMillis();
+        q.removeIf(t -> now - t > 1000);
+        return q.size();
+    }
+
+    // ---------- helpers used by mixins / GUI ----------
+    public static Double gammaOverride() {
+        if (fullbright != null && fullbright.enabled()) return 16.0;
+        if (gamma != null && gamma.enabled()) return (double) gamma.val("gamma", 1.5f);
+        return null;
+    }
+    public static boolean crosshairOn() { return crosshair != null && crosshair.enabled(); }
+    public static boolean animationsOff() { return animOpt != null && animOpt.enabled(); }
+    public static boolean seeInvisiblesOn() { return seeInvisibles != null && seeInvisibles.enabled(); }
+
+    public static boolean allowParticle(ParticleEffect effect) {
+        if (effect.getType() == ParticleTypes.EXPLOSION || effect.getType() == ParticleTypes.EXPLOSION_EMITTER) {
+            for (Module m : particleCutters) {
+                if (m.enabled() && RNG.nextFloat() > m.val("keep", 0.25f)) return false;
+            }
+        }
+        return true;
+    }
+
+    public static Module byId(String id) {
+        for (Module m : ALL) if (m.id.equals(id)) return m;
+        return null;
+    }
+
+    public static int count(MinecraftClient mc, Item item) {
+        if (mc.player == null) return 0;
+        int n = 0;
+        for (int i = 0; i < mc.player.getInventory().size(); i++) {
+            ItemStack st = mc.player.getInventory().getStack(i);
+            if (st.isOf(item)) n += st.getCount();
+        }
+        return n;
+    }
+
+    private static void restoreFps(MinecraftClient mc) {
+        if (savedMaxFps > 0) {
+            mc.options.getMaxFps().setValue(savedMaxFps);
+            savedMaxFps = -1;
+        }
+    }
+
+    public static void applyDistances(Module m) {
+        var o = MinecraftClient.getInstance().options;
+        o.getViewDistance().setValue(Math.round(m.val("rd", 12f)));
+        o.getEntityDistanceScaling().setValue((double) m.val("ed", 1f));
+    }
+
+    public static void cpvpPreset(boolean crystal) {
+        for (Module m : ALL) {
+            if (m.cat == CRYSTAL) m.setEnabled(crystal);
+            if (m.cat == ANCHOR) m.setEnabled(!crystal);
+        }
+        VoidConfig.save();
+    }
+
+    public static void resetAll() {
+        for (Module m : ALL) {
+            m.setEnabled(false);
+            m.s.scale = 1f;
+            m.s.opacity = 0.85f;
+        }
+        VoidConfig.save();
+    }
+
+    public static boolean sodiumLoaded() {
+        return FabricLoader.getInstance().isModLoaded("sodium");
+    }
+
+    private ModuleManager() {}
+}
