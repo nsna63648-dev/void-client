@@ -23,7 +23,6 @@ public class VoidScreen extends Screen {
     private record Hit(int x1, int y1, int x2, int y2, Runnable run) {}
     private record Sl(int x1, int y1, int x2, int y2, float min, float max, Consumer<Float> set) {}
 
-    private static final String[] ICONS = {"H", "F", "B", "C", "E", "S"};
     private Page page = Page.HOME;
     private final long openAt = System.currentTimeMillis();
     private long pageAt = openAt;
@@ -131,12 +130,22 @@ public class VoidScreen extends Screen {
 
         // Sidebar
         card(c, 533, 396, 588, 797, Theme.CARD, 1f);
-        Page[] pages = {Page.HOME, Page.FEATURES, Page.FPS, Page.CPVP, null, Page.SETTINGS};
-        int[] cy = {433, 498, 563, 628, 693, 758};
+        List<String> icons = List.of("H", "F", "B", "C", "E", "S");
+        List<Page> pages = new ArrayList<>();
+        pages.add(Page.HOME);
+        pages.add(Page.FEATURES);
+        pages.add(Page.FPS);
+        pages.add(Page.CPVP);
+        pages.add(null);
+        pages.add(Page.SETTINGS);
+        List<Integer> cy = List.of(433, 498, 563, 628, 693, 758);
+
         for (int i = 0; i < 6; i++) {
-            final Page p = pages[i];
+            final Page p = pages.get(i);
+            int centerY = cy.get(i);
+            String icon = icons.get(i);
             boolean sel = p == page;
-            float y1 = cy[i] - 22, y2 = cy[i] + 22;
+            float y1 = centerY - 22, y2 = centerY + 22;
             int a = X(538), b = Y(y1), d = X(583), e = Y(y2);
             boolean hov = mx >= a && mx <= d && my >= b && my <= e;
             if (sel) {
@@ -145,7 +154,7 @@ public class VoidScreen extends Screen {
             } else if (hov) {
                 Theme.strokeCard(c, a, b, d, e, Math.max(3, Math.round(10 * k)), Theme.argb(cur, 0x22222E), Theme.argb(0.5f * cur, Theme.BORDER));
             }
-            txt(c, ICONS[i], 560 - tw(ICONS[i], 24) / 2f, cy[i] - 12, 24, sel ? 0xFFFFFF : 0xB8B8C0, 1f);
+            txt(c, icon, 560 - tw(icon, 24) / 2f, centerY - 12, 24, sel ? 0xFFFFFF : 0xB8B8C0, 1f);
             hits.add(new Hit(a, b, d, e, () -> {
                 if (p == null) { client.setScreen(new HudEditScreen()); return; }
                 page = p; pageAt = System.currentTimeMillis(); scroll = 0; selected = null; searchFocus = false;
@@ -158,8 +167,8 @@ public class VoidScreen extends Screen {
         switch (page) {
             case HOME -> home(c, mx, my);
             case FEATURES -> list(c, mx, my, null);
-            case FPS -> list(c, mx, my, new Category[]{Category.PERFORMANCE});
-            case CPVP -> list(c, mx, my, new Category[]{Category.CRYSTAL, Category.ANCHOR, Category.COMBAT});
+            case FPS -> list(c, mx, my, List.of(Category.PERFORMANCE));
+            case CPVP -> list(c, mx, my, List.of(Category.CRYSTAL, Category.ANCHOR, Category.COMBAT));
             case SETTINGS -> settings(c, mx, my);
         }
     }
@@ -188,6 +197,3 @@ public class VoidScreen extends Screen {
         txt(c, "VC", 716 - tw("VC", 30) / 2f, 686, 30, Theme.PURPLE_LIGHT, 1f);
         txt(c, "Join our community !", 781, 650, 28, 0xFFFFFF, 1f);
         txt(c, "For support, presets and updates from the VOID community.", 781, 690, 15, Theme.MUTED, 1f);
-        String url = VoidConfig.data.discordUrl;
-        btn(c, 781, 722, 855, 751, "Join >", 13, true, mx, my, () -> { if (url != null && !url.isBlank()) Util.getOperatingSystem().open(url); });
-
