@@ -268,13 +268,13 @@ public final class ModuleManager {
     public static boolean animationsOff() { return animOpt != null && animOpt.enabled(); }
     public static boolean seeInvisiblesOn() { return seeInvisibles != null && seeInvisibles.enabled(); }
 
-    public static boolean allowParticle(ParticleEffect effect) {
+        public static boolean dropParticle(ParticleEffect effect) {
         if (effect.getType() == ParticleTypes.EXPLOSION || effect.getType() == ParticleTypes.EXPLOSION_EMITTER) {
             for (Module m : particleCutters) {
-                if (m.enabled() && RNG.nextFloat() > m.val("keep", 0.25f)) return false;
+                if (m.enabled() && RNG.nextFloat() > m.val("keep", 0.25f)) return true;
             }
         }
-        return true;
+        return false;
     }
 
     public static Module byId(String id) {
