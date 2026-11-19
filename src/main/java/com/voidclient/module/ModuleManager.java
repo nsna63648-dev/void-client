@@ -162,6 +162,14 @@ public final class ModuleManager {
         hud("anchorhud", "Anchor HUD", "Respawn Anchor / Glowstone ในกระเป๋า", ANCHOR, false, 260, 96, mc ->
                 List.of("Anchors  " + count(mc, Items.RESPAWN_ANCHOR), "Glowstone  " + count(mc, Items.GLOWSTONE)));
         hud("anchorstatus", "Anchor Status Display", "สถานะ charge ของ Anchor ที่มองอยู่", ANCHOR, false, 260, 126, mc -> {
+            if (mc.world == null || !(mc.crosshairTarget instanceof BlockHitResult b) || b.getType() != HitResult.Type.BLOCK) return List.of();
+            BlockState st = mc.world.getBlockState(b.getBlockPos());
+            if (!st.isOf(Blocks.RESPAWN_ANCHOR)) return List.of();
+            return List.of("Anchor charge  " + st.get(RespawnAnchorBlock.CHARGES) + " / 4");
+        });
+        particleCutters.add(add(new Toggle("anchorparticle", "Anchor Particle Optimizer", "ลด Particle ระเบิด Anchor", ANCHOR, false, null))
+                .with(new Setting("keep", "Keep %", 0f, 1f, 0.25f)));
+
         // ---------- COMBAT ----------
         hud("totem", "Totem Counter", "จำนวน Totem", COMBAT, false, 380, 6, mc -> List.of("Totems  " + count(mc, Items.TOTEM_OF_UNDYING)));
         hud("health", "Health Display", "เลือด + absorption", COMBAT, false, 380, 24, mc -> mc.player == null ? List.of() :
@@ -190,17 +198,17 @@ public final class ModuleManager {
                 out.add(Enchantment.getName(e.getKey(), e.getIntValue()).getString());
             return out;
         });
-            hud("nearby", "Surrounding Entity Counter", "จำนวน Entity รอบตัว 16 บล็อก", COMBAT, false, 380, 190, mc ->
-             List.of("Nearby  " + nearby));
-
+        hud("nearby", "Surrounding Entity Counter", "จำนวน Entity รอบตัว 16 บล็อก", COMBAT, false, 380, 190, mc ->
+                List.of("Nearby  " + nearby));
         hud("dmgind", "Custom Damage Indicators", "ตัวเลขดาเมจที่ได้รับ", COMBAT, false, 380, 208, mc ->
                 dmgTicks > 0 ? List.of(String.format("-%.1f", lastDamage)) : List.of());
-               add(new Toggle("pvpperf", "PVP Performance", "ลด Particle/เงา ระหว่างสู้เพื่อลด FPS drop", COMBAT, false, on -> {
+        add(new Toggle("pvpperf", "PVP Performance", "ลด Particle/เงา ระหว่างสู้เพื่อลด FPS drop", COMBAT, false, on -> {
             var o = MinecraftClient.getInstance().options;
             o.getParticles().setValue(on ? ParticlesMode.MINIMAL : ParticlesMode.ALL);
             o.getEntityShadows().setValue(!on);
         }));
     }
+
 
     // ---------- runtime ----------
     public static void tick(MinecraftClient mc) {
