@@ -72,10 +72,11 @@ public final class ModuleManager {
         add(new Special.Potion());
 
         // ---------- VISUAL ----------
-        seeInvisibles = add(new Toggle("seeinvisibles", "See Invisibles", "มองเห็นผู้เล่นที่ดื่มยาล่องหน", VISUAL, false, null));
-        itemEsp = add(new Toggle("itemesp", "Item ESP", "แสดงเส้นขอบเรืองแสงให้สิ่งของที่ตกพื้น", VISUAL, false, null));
-        mobEsp = add(new Toggle("mobesp", "Entity / Mob ESP", "แสดงเส้นขอบเรืองแสงให้สัตว์และมอนสเตอร์", VISUAL, false, null));
-        playerEsp = add(new Toggle("playeresp", "Player ESP", "แสดงเส้นขอบเรืองแสงให้ผู้เล่นอื่น", VISUAL, false, null));
+             seeInvisibles = add(new Toggle("seeinvisibles", "See Invisibles", "มองเห็นผู้เล่นที่ดื่มยาล่องหน", VISUAL, false, null));
+     itemEsp = add(new Toggle("itemesp", "Item ESP", "แสดงเส้นขอบเรืองแสงให้สิ่งของที่ตกพื้น", VISUAL, false, null));
+     mobEsp = add(new Toggle("mobesp", "Entity / Mob ESP", "แสดงเส้นขอบเรืองแสงให้สัตว์และมอนสเตอร์", VISUAL, false, null));
+     playerEsp = add(new Toggle("playeresp", "Player ESP", "แสดงเส้นขอบเรืองแสงให้ผู้เล่นอื่น", VISUAL, false, null));
+
         fullbright = add(new Toggle("fullbright", "Fullbright", "เพิ่มความสว่างในพื้นที่มืด", VISUAL, false, null));
         gamma = add(new Toggle("gamma", "Gamma Control", "ปรับระดับความสว่าง", VISUAL, false, null))
                 .with(new Setting("gamma", "Gamma", 0f, 10f, 1.5f));
