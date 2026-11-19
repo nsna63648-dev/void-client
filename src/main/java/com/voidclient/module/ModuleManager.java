@@ -190,8 +190,9 @@ public final class ModuleManager {
                 out.add(Enchantment.getName(e.getKey(), e.getIntValue()).getString());
             return out;
         });
-        hud("nearby", "Surrounding Entity Counter", "จำนวน Entity รอบตัว 16 บล็อก", COMBAT, false, 380, 190, mc ->
-                List.of("Nearby  " + nearby));
+            hud("nearby", "Surrounding Entity Counter", "จำนวน Entity รอบตัว 16 บล็อก", COMBAT, false, 380, 190, mc ->
+             List.of("Nearby  " + nearby));
+
         hud("dmgind", "Custom Damage Indicators", "ตัวเลขดาเมจที่ได้รับ", COMBAT, false, 380, 208, mc ->
                 dmgTicks > 0 ? List.of(String.format("-%.1f", lastDamage)) : List.of());
                add(new Toggle("pvpperf", "PVP Performance", "ลด Particle/เงา ระหว่างสู้เพื่อลด FPS drop", COMBAT, false, on -> {
