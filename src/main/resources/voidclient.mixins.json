@@ -2,6 +2,13 @@
   "required": true,
   "package": "com.voidclient.mixin",
   "compatibilityLevel": "JAVA_21",
-  "client": ["SimpleOptionMixin", "InGameHudMixin", "ParticleManagerMixin"],
-  "injectors": { "defaultRequire": 0 }
+  "client": [
+    "InGameHudMixin",
+    "ParticleManagerMixin",
+    "SimpleOptionMixin",
+    "EntityMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
 }
