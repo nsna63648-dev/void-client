@@ -199,11 +199,12 @@ public final class ModuleManager {
             o.getParticles().setValue(on ? ParticlesMode.MINIMAL : ParticlesMode.ALL);
             o.getEntityShadows().setValue(!on);
         }));
+    }
 
     // ---------- runtime ----------
     public static void tick(MinecraftClient mc) {
-ฏ
         boolean inWorld = mc.world != null;
+
         if (wasInWorld && !inWorld && memoryOpt != null && memoryOpt.enabled()) System.gc();
         wasInWorld = inWorld;
 
