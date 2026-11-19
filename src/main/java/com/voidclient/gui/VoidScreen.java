@@ -190,3 +190,4 @@ public class VoidScreen extends Screen {
         txt(c, "For support, presets and updates from the VOID community.", 781, 690, 15, Theme.MUTED, 1f);
         String url = VoidConfig.data.discordUrl;
         btn(c, 781, 722, 855, 751, "Join >", 13, true, mx, my, () -> { if (url != null && !url.isBlank()) Util.getOperatingSystem().open(url); });
+
