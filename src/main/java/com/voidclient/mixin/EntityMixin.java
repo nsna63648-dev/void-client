@@ -13,12 +13,8 @@ public abstract class EntityMixin {
 
     @Inject(method = "isInvisible", at = @At("HEAD"), cancellable = true)
     private void onIsInvisible(CallbackInfoReturnable<Boolean> cir) {
-        // ตรวจสอบว่า Entity นี้เป็นผู้เล่น และฟีเจอร์ SeeInvisibles เปิดอยู่หรือไม่
-        if ((Object) this instanceof PlayerEntity) {
-            // *หมายเหตุ: เปลี่ยนชื่อเมธอดเช็กสถานะให้ตรงกับใน ModuleManager.java ของคุณ
-            if (ModuleManager.isEnabled("SeeInvisibles")) { 
-                cir.setReturnValue(false);
-            }
+        if ((Object) this instanceof PlayerEntity && ModuleManager.seeInvisiblesOn()) {
+            cir.setReturnValue(false);
         }
     }
 }
