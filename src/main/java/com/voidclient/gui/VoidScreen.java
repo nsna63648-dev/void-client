@@ -195,8 +195,15 @@ public class VoidScreen extends Screen {
         card(c, 653, 627, 1363, 770, Theme.CARD2, 1f);
         glowCard(c, 675, 657, 757, 747, 0x241B3A, Theme.PURPLE);
         txt(c, "VC", 716 - tw("VC", 30) / 2f, 686, 30, Theme.PURPLE_LIGHT, 1f);
-        txt(c, "Join our community !", 781, 650, 28, 0xFFFFFF, 1f);
+                txt(c, "Join our community !", 781, 650, 28, 0xFFFFFF, 1f);
+        txt(c, "For support, presets and updates from the VOID community.", 781, 690, 15, Theme.MUTED, 1f);
+        String url = VoidConfig.data.discordUrl;
+        btn(c, 781, 722, 855, 751, "Join >", 13, true, mx, my, () -> { if (url != null && !url.isBlank()) Util.getOperatingSystem().open(url); });
+        if (url == null || url.isBlank()) txt(c, "(ใส่ discordUrl ใน config/voidclient.json)", 870, 730, 12, Theme.MUTED, 1f);
+    }
+
     private List<Module> filtered(List<Category> cats) {
+
         List<Module> out = new ArrayList<>();
         String q = search.toLowerCase();
         for (Module m : ModuleManager.ALL) {
