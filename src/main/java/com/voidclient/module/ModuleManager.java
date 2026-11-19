@@ -194,15 +194,15 @@ public final class ModuleManager {
                 List.of("Nearby  " + nearby));
         hud("dmgind", "Custom Damage Indicators", "ตัวเลขดาเมจที่ได้รับ", COMBAT, false, 380, 208, mc ->
                 dmgTicks > 0 ? List.of(String.format("-%.1f", lastDamage)) : List.of());
-        add(new Toggle("pvpperf", "PVP Performance", "ลด Particle/เงา ระหว่างสู้เพื่อลด FPS drop", COMBAT, false, on -> {
+               add(new Toggle("pvpperf", "PVP Performance", "ลด Particle/เงา ระหว่างสู้เพื่อลด FPS drop", COMBAT, false, on -> {
             var o = MinecraftClient.getInstance().options;
             o.getParticles().setValue(on ? ParticlesMode.MINIMAL : ParticlesMode.ALL);
             o.getEntityShadows().setValue(!on);
         }));
-    }
 
     // ---------- runtime ----------
     public static void tick(MinecraftClient mc) {
+ฏ
         boolean inWorld = mc.world != null;
         if (wasInWorld && !inWorld && memoryOpt != null && memoryOpt.enabled()) System.gc();
         wasInWorld = inWorld;
