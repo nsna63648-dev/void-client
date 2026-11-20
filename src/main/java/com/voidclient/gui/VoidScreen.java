@@ -339,3 +339,68 @@ public class VoidScreen extends Screen {
         btn(c, 1000, 380, 1262, 428, "Reset All Settings", 17, false, mx, my, () -> { ModuleManager.resetAll(); selected = null; });
         txt(c, "Menu key: RIGHT SHIFT  (เปลี่ยนได้ใน Options > Controls > VOID CLIENT)", 720, 456, 15, 0xFFFFFF, 1f);
         txt(c, "Minecraft 1.21.11  |  Fabric  |  Java 21", 720, 488, 15, Theme.MUTED, 1f);
+        txt(c, "Sodium: " + (ModuleManager.sodiumLoaded() ? "detected" : "not installed (แนะนำให้ติดตั้ง)"), 720, 518, 15, Theme.MUTED, 1f);
+        txt(c, "Config: config/voidclient.json (บันทึกอัตโนมัติ)", 720, 548, 15, Theme.MUTED, 1f);
+        txt(c, "HUD color: Cyber Violet  |  ไม่มีระบบอัตโนมัติ / ไม่แก้ไฟล์เกมต้นฉบับ", 720, 578, 15, Theme.MUTED, 1f);
+    }
+
+    @Override public boolean mouseClicked(Click click, boolean doubled) {
+        double mx = click.x(), my = click.y();
+        if (click.button() != 0) return super.mouseClicked(click, doubled);
+        searchFocus = false;
+        for (Sl s : sliders) if (mx >= s.x1 && mx <= s.x2 && my >= s.y1 && my <= s.y2) { active = s; dragSlider(mx); return true; }
+        for (int i = hits.size() - 1; i >= 0; i--) {
+            Hit h = hits.get(i);
+            if (mx >= h.x1 && mx <= h.x2 && my >= h.y1 && my <= h.y2) { h.run.run(); return true; }
+        }
+        return super.mouseClicked(click, doubled);
+    }
+
+    private void dragSlider(double mx) {
+        if (active == null) return;
+        float t = (float) ((mx - active.x1) / (active.x2 - active.x1));
+        t = Math.max(0f, Math.min(1f, t));
+        active.set.accept(active.min + t * (active.max - active.min));
+    }
+
+    @Override public boolean mouseDragged(Click click, double dx, double dy) {
+        if (active != null) { dragSlider(click.x()); return true; }
+        return super.mouseDragged(click, dx, dy);
+    }
+
+    @Override public boolean mouseReleased(Click click) {
+        if (active != null) { active = null; VoidConfig.save(); return true; }
+        return super.mouseReleased(click);
+    }
+
+    @Override public boolean mouseScrolled(double mx, double my, double horizontalAmount, double verticalAmount) {
+        scroll -= (float) (verticalAmount * 28f);
+        return true;
+    }
+
+    @Override public boolean keyPressed(KeyInput input) {
+        if (searchFocus) {
+            int key = input.key();
+            if (key == GLFW.GLFW_KEY_ESCAPE || key == GLFW.GLFW_KEY_ENTER) { searchFocus = false; return true; }
+            if (key == GLFW.GLFW_KEY_BACKSPACE && !search.isEmpty()) {
+                search = search.substring(0, search.length() - 1);
+                return true;
+            }
+            return true;
+        }
+        return super.keyPressed(input);
+    }
+
+    @Override public boolean charTyped(CharInput input) {
+        if (searchFocus && input.codepoint() >= 32) {
+            search += Character.toString(input.codepoint());
+            return true;
+        }
+        return super.charTyped(input);
+    }
+
+    @Override public void close() {
+        VoidConfig.save();
+        super.close();
+    }
+}
