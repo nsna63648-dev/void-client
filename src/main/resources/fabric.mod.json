@@ -6,6 +6,7 @@
   "description": "Premium purple/black Fabric client: HUD, FPS boost, Crystal & Anchor PvP visuals. Client-side only, no automation.",
   "authors": ["VOID"],
   "license": "MIT",
+  "icon": "assets/voidclient/icon.png",
   "environment": "client",
   "entrypoints": { "client": ["com.voidclient.VoidClient"] },
   "mixins": ["voidclient.mixins.json"],
