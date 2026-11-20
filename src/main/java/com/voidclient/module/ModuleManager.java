@@ -72,6 +72,9 @@ public final class ModuleManager {
         add(new Special.Potion());
 
         // ---------- VISUAL ----------
+                add(new Toggle("voidcape", "Void Cape", "ผ้าคลุมลาย VOID สีม่วง-ดำบนหลังตัวละคร", VISUAL, true, null));
+        add(new Toggle("voidwings", "Void Wings", "ปีกสีม่วงเรืองแสงบนหลังตัวละคร (ขยับตามการเคลื่อนไหว)", VISUAL, true, null));
+
              seeInvisibles = add(new Toggle("seeinvisibles", "See Invisibles", "มองเห็นผู้เล่นที่ดื่มยาล่องหน", VISUAL, false, null));
      itemEsp = add(new Toggle("itemesp", "Item ESP", "แสดงเส้นขอบเรืองแสงให้สิ่งของที่ตกพื้น", VISUAL, false, null));
      mobEsp = add(new Toggle("mobesp", "Entity / Mob ESP", "แสดงเส้นขอบเรืองแสงให้สัตว์และมอนสเตอร์", VISUAL, false, null));
