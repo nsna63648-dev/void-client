@@ -17,35 +17,52 @@ import net.minecraft.text.Text;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.UUID;
 
 public class VoidTitleScreen extends Screen {
     private record Hit(int x1, int y1, int x2, int y2, Runnable run) {}
     private record Star(float x, float y, float sz, float a) {}
+    private record LabelTask(String text, float x, float y, float scale, int color, boolean shadow, float rot) {}
 
     private final List<Hit> hits = new ArrayList<>();
     private final List<Star> stars = new ArrayList<>();
+    private final List<LabelTask> texts = new ArrayList<>();
     private final long openAt = System.currentTimeMillis();
     private SkinTextures cachedSkin;
-    private boolean skinRequested;
+    private boolean skinFetched;
 
     public VoidTitleScreen() {
         super(Text.literal("VOID CLIENT"));
         Random r = new Random(2026);
         for (int i = 0; i < 45; i++) {
-            stars.add(new Star(r.nextFloat(), r.nextFloat(), 1.5f + r.nextFloat() * 2.5f, 0.2f + r.nextFloat() * 0.6f));
+            stars.add(new Star(r.nextFloat(), r.nextFloat(), 1.5f + r.nextFloat() * 2.5f, 0.25f + r.nextFloat() * 0.6f));
         }
     }
 
     @Override public boolean shouldCloseOnEsc() { return false; }
 
-    private SkinTextures getSkinTextures() {
+    private void addTxt(String s, float x, float y, int color, boolean shadow) {
+        texts.add(new LabelTask(s, x, y, 1.0f, color, shadow, 0f));
+    }
+
+    private void addScaledTxt(String s, float x, float y, float scale, int color, boolean shadow, float rot) {
+        texts.add(new LabelTask(s, x, y, scale, color, shadow, rot));
+    }
+
+    private SkinTextures resolveSkin() {
         if (cachedSkin != null) return cachedSkin;
         var session = client.getSession();
         if (session == null) return DefaultSkinHelper.getSteve();
-        GameProfile profile = new GameProfile(session.getUuidOrNull(), session.getUsername());
-        if (!skinRequested) {
-            skinRequested = true;
-            client.getSkinProvider().fetchSkinTextures(profile).thenAccept(opt -> opt.ifPresent(st -> cachedSkin = st));
+
+        UUID uuid = session.getUuidOrNull();
+        if (uuid == null) uuid = UUID.nameUUIDFromBytes(("OfflinePlayer:" + session.getUsername()).getBytes());
+        GameProfile profile = new GameProfile(uuid, session.getUsername());
+
+        if (!skinFetched) {
+            skinFetched = true;
+            client.getSkinProvider().fetchSkinTextures(profile).thenAccept(opt -> {
+                opt.ifPresent(st -> cachedSkin = st);
+            });
         }
         return DefaultSkinHelper.getSkinTextures(profile);
     }
@@ -53,18 +70,20 @@ public class VoidTitleScreen extends Screen {
     private void drawStyledBtn(DrawContext c, int x, int y, int w, int h, String icon, String label, int mx, int my, Runnable action) {
         boolean hov = mx >= x && mx <= x + w && my >= y && my <= y + h;
         int rad = 7;
-        if (hov) Theme.rrect(c, x - 3, y - 3, x + w + 3, y + h + 3, rad + 3, Theme.argb(0.32f, Theme.PURPLE));
+        if (hov) Theme.rrect(c, x - 3, y - 3, x + w + 3, y + h + 3, rad + 3, Theme.argb(0.35f, Theme.PURPLE));
 
-        int fill = hov ? Theme.argb(0.78f, 0x221538) : Theme.argb(0.65f, 0x110B1D);
-        int border = hov ? Theme.argb(0.95f, Theme.PURPLE_LIGHT) : Theme.argb(0.75f, Theme.PURPLE);
+        int fill = hov ? Theme.argb(0.82f, 0x261740) : Theme.argb(0.72f, 0x130C22);
+        int border = hov ? Theme.argb(1.0f, Theme.PURPLE_LIGHT) : Theme.argb(0.8f, Theme.PURPLE);
         Theme.strokeCard(c, x, y, x + w, y + h, rad, fill, border);
 
-        c.fill(x + h, y + 3, x + h + 1, y + h - 3, Theme.argb(0.45f, Theme.PURPLE));
-        c.drawText(textRenderer, icon, x + (h - textRenderer.getWidth(icon)) / 2, y + (h - 8) / 2, hov ? 0xFFFFFF : Theme.PURPLE_LIGHT, false);
+        c.fill(x + h, y + 3, x + h + 1, y + h - 3, Theme.argb(0.55f, Theme.PURPLE));
+
+        addTxt(icon, x + (h - textRenderer.getWidth(icon)) / 2f, y + (h - 8) / 2f, hov ? 0xFFFFFFFF : (0xFF000000 | Theme.PURPLE_LIGHT), false);
 
         int textAreaX = x + h;
         int textAreaW = w - h;
-        c.drawText(textRenderer, label, textAreaX + (textAreaW - textRenderer.getWidth(label)) / 2, y + (h - 8) / 2, 0xFFFFFF, true);
+        addTxt(label, textAreaX + (textAreaW - textRenderer.getWidth(label)) / 2f, y + (h - 8) / 2f, 0xFFFFFFFF, true);
+
         hits.add(new Hit(x, y, x + w, y + h, action));
     }
 
@@ -72,45 +91,53 @@ public class VoidTitleScreen extends Screen {
         boolean hov = mx >= x && mx <= x + size && my >= y && my <= y + size;
         if (hov) Theme.rrect(c, x - 2, y - 2, x + size + 2, y + size + 2, 8, Theme.argb(0.35f, Theme.PURPLE));
         Theme.strokeCard(c, x, y, x + size, y + size, 6,
-                hov ? Theme.argb(0.8f, 0x261740) : Theme.argb(0.68f, 0x130D21),
-                hov ? Theme.argb(0.95f, Theme.PURPLE_LIGHT) : Theme.argb(0.75f, Theme.PURPLE));
-        c.drawText(textRenderer, icon, x + (size - textRenderer.getWidth(icon)) / 2, y + (size - 8) / 2, hov ? 0xFFFFFF : Theme.PURPLE_LIGHT, false);
+                hov ? Theme.argb(0.85f, 0x2A1A46) : Theme.argb(0.75f, 0x140D24),
+                hov ? Theme.argb(1.0f, Theme.PURPLE_LIGHT) : Theme.argb(0.8f, Theme.PURPLE));
+        addTxt(icon, x + (size - textRenderer.getWidth(icon)) / 2f, y + (size - 8) / 2f, hov ? 0xFFFFFFFF : (0xFF000000 | Theme.PURPLE_LIGHT), false);
         hits.add(new Hit(x, y, x + size, y + size, action));
     }
 
     private void drawLeftAccountCard(DrawContext c) {
-        int cardW = 118;
-        int cardH = 148;
-        int cx = Math.max(16, width / 2 - 248);
+        int cardW = 122;
+        int cardH = 152;
+        int cx = Math.max(16, width / 2 - 252);
         int cy = height / 2 - cardH / 2 + 4;
 
-        Theme.rrect(c, cx - 3, cy - 3, cx + cardW + 3, cy + cardH + 3, 13, Theme.argb(0.26f, Theme.PURPLE));
-        Theme.strokeCard(c, cx, cy, cx + cardW, cy + cardH, 10, Theme.argb(0.72f, 0x110B1E), Theme.argb(0.85f, Theme.PURPLE));
+        // Outer Neon Glow Card
+        Theme.rrect(c, cx - 3, cy - 3, cx + cardW + 3, cy + cardH + 3, 13, Theme.argb(0.28f, Theme.PURPLE));
+        Theme.strokeCard(c, cx, cy, cx + cardW, cy + cardH, 10, Theme.argb(0.78f, 0x110B1E), Theme.argb(0.88f, Theme.PURPLE));
 
-        Theme.rrect(c, cx + 16, cy + 8, cx + cardW - 16, cy + 21, 5, Theme.argb(0.8f, 0x2A184A));
-        String tag = "ACCOUNT SKIN";
-        c.drawText(textRenderer, tag, cx + (cardW - textRenderer.getWidth(tag)) / 2, cy + 11, Theme.PURPLE_LIGHT, false);
+        // Top Badge
+        Theme.rrect(c, cx + 14, cy + 8, cx + cardW - 14, cy + 22, 5, Theme.argb(0.85f, 0x2E1A52));
+        String tag = "YOUR SKIN";
+        addTxt(tag, cx + (cardW - textRenderer.getWidth(tag)) / 2f, cy + 11, 0xFF000000 | Theme.PURPLE_LIGHT, false);
 
-        int skinSize = 56;
+        // Skin Frame (60x60)
+        int skinSize = 60;
         int sx = cx + (cardW - skinSize) / 2;
         int sy = cy + 28;
-        Theme.strokeCard(c, sx - 3, sy - 3, sx + skinSize + 3, sy + skinSize + 3, 8, Theme.argb(0.9f, 0x1B1130), Theme.argb(0.85f, Theme.PURPLE_LIGHT));
-        PlayerSkinDrawer.draw(c, getSkinTextures(), sx, sy, skinSize);
+        Theme.strokeCard(c, sx - 3, sy - 3, sx + skinSize + 3, sy + skinSize + 3, 8, Theme.argb(0.95f, 0x1B1130), Theme.argb(0.9f, Theme.PURPLE_LIGHT));
+        PlayerSkinDrawer.draw(c, resolveSkin(), sx, sy, skinSize);
 
-        int plateY = cy + 94;
-        Theme.strokeCard(c, cx + 10, plateY, cx + cardW - 10, plateY + 24, 6, Theme.argb(0.85f, 0x1D1233), Theme.argb(0.75f, Theme.PURPLE));
+        // Account Name Plate
+        int plateY = cy + 97;
+        Theme.strokeCard(c, cx + 10, plateY, cx + cardW - 10, plateY + 24, 6, Theme.argb(0.9f, 0x1F1338), Theme.argb(0.85f, Theme.PURPLE));
         String username = client.getSession() != null ? client.getSession().getUsername() : "Player";
         if (textRenderer.getWidth(username) > cardW - 26) {
             username = username.substring(0, Math.min(username.length(), 12)) + "..";
         }
-        c.drawText(textRenderer, username, cx + (cardW - textRenderer.getWidth(username)) / 2, plateY + 8, 0xFFFFFF, true);
+        addTxt(username, cx + (cardW - textRenderer.getWidth(username)) / 2f, plateY + 8, 0xFFFFFFFF, true);
 
-        String status = "● Active Profile";
-        c.drawText(textRenderer, status, cx + (cardW - textRenderer.getWidth(status)) / 2, plateY + 30, 0x4ADE80, false);
+        // Active Status
+        String status = "● Online Account";
+        addTxt(status, cx + (cardW - textRenderer.getWidth(status)) / 2f, plateY + 31, 0xFF4ADE80, false);
     }
 
     @Override public void render(DrawContext c, int mx, int my, float delta) {
         hits.clear();
+        texts.clear();
+
+        // 1. Background + Violet Night Overlay
         renderPanoramaBackground(c, delta);
         c.fillGradient(0, 0, width, height, Theme.argb(0.68f, 0x090414), Theme.argb(0.84f, 0x180930));
 
@@ -122,60 +149,46 @@ public class VoidTitleScreen extends Screen {
             Theme.rrect(c, sx, sy, sx + sz, sy + sz, sz / 2, Theme.argb(s.a * 0.75f, Theme.PURPLE_LIGHT));
         }
 
+        // 2. Draw all Cards & Buttons FIRST
         drawLeftAccountCard(c);
 
         int centerX = width / 2;
         int topY = Math.max(28, height / 2 - 112);
 
-        var m = c.getMatrices();
-        m.pushMatrix();
-        m.translate(centerX, topY);
-        m.scale(2.8f, 2.8f);
         String title = "VOID CLIENT";
-        int tw = textRenderer.getWidth(title);
-        c.drawText(textRenderer, title, -tw / 2 + 1, 1, Theme.argb(0.8f, 0x3B0764), false);
-        c.drawText(textRenderer, title, -tw / 2, 0, 0xFFFFFF, false);
-        m.popMatrix();
+        float titleScale = 2.8f;
+        float tw = textRenderer.getWidth(title) * titleScale;
+        addScaledTxt(title, centerX - tw / 2f + 2f, topY + 2f, titleScale, Theme.argb(0.85f, 0x3B0764), false, 0f);
+        addScaledTxt(title, centerX - tw / 2f, topY, titleScale, 0xFFFFFFFF, false, 0f);
 
         String sub = "✦  MINECRAFT 1.21.11  •  FABRIC  ✦";
-        c.drawText(textRenderer, sub, centerX - textRenderer.getWidth(sub) / 2, topY + 30, Theme.PURPLE_LIGHT, true);
+        addTxt(sub, centerX - textRenderer.getWidth(sub) / 2f, topY + 30, 0xFF000000 | Theme.PURPLE_LIGHT, true);
 
         float pulse = 1.0f + 0.06f * (float) Math.sin(time * 4f);
-        m.pushMatrix();
-        m.translate(centerX + 115, topY + 20);
-        m.rotate(-0.32f);
-        m.scale(pulse, pulse);
-        c.drawText(textRenderer, "Have fun! ♥", 0, 0, 0xE879F9, true);
-        m.popMatrix();
+        addScaledTxt("Have fun! ♥", centerX + 115, topY + 20, pulse, 0xFFE879F9, true, -0.32f);
 
         int btnW = 220, btnH = 24, btnX = centerX - btnW / 2, startY = topY + 52, gap = 29;
-        drawStyledBtn(c, btnX, startY, btnW, btnH, "▶", "Singleplayer", mx, my, () -> client.setScreen(new SelectWorldScreen(this)));
-        drawStyledBtn(c, btnX, startY + gap, btnW, btnH, "👥", "Multiplayer", mx, my, () -> client.setScreen(new MultiplayerScreen(this)));
-        drawStyledBtn(c, btnX, startY + gap * 2, btnW, btnH, "★", "Void Client Menu", mx, my, () -> client.setScreen(new VoidScreen()));
+        drawStyledBtn(c, btnX, startY, btnW, btnH, ">", "Singleplayer", mx, my, () -> client.setScreen(new SelectWorldScreen(this)));
+        drawStyledBtn(c, btnX, startY + gap, btnW, btnH, "M", "Multiplayer", mx, my, () -> client.setScreen(new MultiplayerScreen(this)));
+        drawStyledBtn(c, btnX, startY + gap * 2, btnW, btnH, "*", "Void Client Menu", mx, my, () -> client.setScreen(new VoidScreen()));
 
         int halfW = (btnW - 8) / 2;
-        drawStyledBtn(c, btnX, startY + gap * 3, halfW, btnH, "⚙", "Options...", mx, my, () -> client.setScreen(new OptionsScreen(this, client.options)));
-        drawStyledBtn(c, btnX + halfW + 8, startY + gap * 3, halfW, btnH, "✖", "Quit Game", mx, my, () -> client.scheduleStop());
+        drawStyledBtn(c, btnX, startY + gap * 3, halfW, btnH, "O", "Options...", mx, my, () -> client.setScreen(new OptionsScreen(this, client.options)));
+        drawStyledBtn(c, btnX + halfW + 8, startY + gap * 3, halfW, btnH, "X", "Quit Game", mx, my, () -> client.scheduleStop());
 
         int bSize = 24, by = height - 42;
         drawMiniIconBtn(c, 16, by, bSize, "V", mx, my, () -> client.setScreen(new VoidScreen()));
-        drawMiniIconBtn(c, 46, by, bSize, "🌐", mx, my, () -> client.setScreen(new LanguageOptionsScreen(this, client.options, client.getLanguageManager())));
-        drawMiniIconBtn(c, 76, by, bSize, "♿", mx, my, () -> client.setScreen(new AccessibilityOptionsScreen(this, client.options)));
+        drawMiniIconBtn(c, 46, by, bSize, "L", mx, my, () -> client.setScreen(new LanguageOptionsScreen(this, client.options, client.getLanguageManager())));
+        drawMiniIconBtn(c, 76, by, bSize, "A", mx, my, () -> client.setScreen(new AccessibilityOptionsScreen(this, client.options)));
 
-        c.drawText(textRenderer, "Minecraft 1.21.11  |  Void Client v1.0.0", 10, height - 12, Theme.MUTED, true);
+        addTxt("Minecraft 1.21.11  |  Void Client v1.0.0", 10, height - 12, 0xFF000000 | Theme.MUTED, true);
         String copy = "Copyright Mojang Studios. Do not distribute!";
-        c.drawText(textRenderer, copy, width - textRenderer.getWidth(copy) - 10, height - 12, Theme.MUTED, true);
-    }
+        addTxt(copy, width - textRenderer.getWidth(copy) - 10, height - 12, 0xFF000000 | Theme.MUTED, true);
 
-    @Override public boolean mouseClicked(Click click, boolean doubled) {
-        if (click.button() == 0) {
-            double mx = click.x(), my = click.y();
-            for (int i = hits.size() - 1; i >= 0; i--) {
-                Hit h = hits.get(i);
-                if (mx >= h.x1 && mx <= h.x2 && my >= h.y1 && my <= h.y2) { h.run.run(); return true; }
-            }
-        }
-        return super.mouseClicked(click, doubled);
-    }
-}
-
+        // 3. Render ALL Texts LAST so they appear cleanly on top of every box/button
+        var m = c.getMatrices();
+        for (LabelTask t : texts) {
+            m.pushMatrix();
+            m.translate(t.x, t.y);
+            if (t.rot != 0f) m.rotate(t.rot);
+            if (t.scale != 1.0f) m.scale(t.scale, t.scale);
