@@ -6,7 +6,8 @@
     "InGameHudMixin",
     "ParticleManagerMixin",
     "SimpleOptionMixin",
-    "EntityMixin"
+    "EntityMixin",
+    "PlayerCosmeticsMixin"
   ],
   "injectors": {
     "defaultRequire": 1
