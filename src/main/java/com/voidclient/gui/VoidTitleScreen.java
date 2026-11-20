@@ -203,6 +203,29 @@ public class VoidTitleScreen extends Screen {
                 }
             }
             case 6 -> { // Void V Emblem (Bottom-left 1)
+                                for (int i = 0; i < 6; i++) {
+                    c.fill(cx - 5 + i / 2, cy - 3 + i, cx - 3 + i / 2, cy - 2 + i, col);
+                    c.fill(cx + 3 - i / 2, cy - 3 + i, cx + 5 - i / 2, cy - 2 + i, col);
+                }
+            }
+            case 7 -> { // Globe Icon (Bottom-left 2 - Language)
+                c.fill(cx - 3, cy - 5, cx + 4, cy - 4, col);
+                c.fill(cx - 3, cy + 4, cx + 4, cy + 5, col);
+                c.fill(cx - 5, cy - 3, cx - 4, cy + 4, col);
+                c.fill(cx + 4, cy - 3, cx + 5, cy + 4, col);
+                c.fill(cx - 4, cy, cx + 5, cy + 1, col);
+                c.fill(cx, cy - 4, cx + 1, cy + 5, col);
+            }
+            case 8 -> { // Accessibility Person Icon (Bottom-left 3)
+                c.fill(cx - 1, cy - 5, cx + 2, cy - 3, col);
+                c.fill(cx - 5, cy - 2, cx + 6, cy - 1, col);
+                c.fill(cx - 1, cy - 1, cx + 2, cy + 2, col);
+                c.fill(cx - 3, cy + 2, cx - 1, cy + 5, col);
+                c.fill(cx + 2, cy + 2, cx + 4, cy + 5, col);
+            }
+        }
+    }
+
  private void drawLeftAccountCard(DrawContext c) {
         String username = getAccountName();
         var session = client.getSession();
