@@ -59,7 +59,7 @@ public final class VoidCosmetics {
                 {4, 7}, {7, 7}, {4, 8}, {7, 8},
                 {5, 9}, {6, 9}, {5, 10}, {6, 10}
         };
-        for (int[] p : vPixels) cape.setColorArgb(p, p, lightCol);
+                for (int[] p : vPixels) cape.setColorArgb(p[0], p[1], lightCol);
         cape.setColorArgb(4, 3, 0xFFC084FC);
         cape.setColorArgb(6, 3, 0xFFC084FC);
         cape.setColorArgb(7, 3, 0xFFC084FC);
