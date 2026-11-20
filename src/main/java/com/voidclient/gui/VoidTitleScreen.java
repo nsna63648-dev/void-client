@@ -1,5 +1,6 @@
 package com.voidclient.gui;
 
+import com.google.gson.JsonParser;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
@@ -14,10 +15,16 @@ import net.minecraft.client.util.DefaultSkinHelper;
 import net.minecraft.entity.player.SkinTextures;
 import net.minecraft.text.Text;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class VoidTitleScreen extends Screen {
     private record Hit(int x1, int y1, int x2, int y2, Runnable run) {}
@@ -28,8 +35,9 @@ public class VoidTitleScreen extends Screen {
     private final List<Star> stars = new ArrayList<>();
     private final List<LabelTask> texts = new ArrayList<>();
     private final long openAt = System.currentTimeMillis();
+
     private SkinTextures cachedSkin;
-    private boolean skinFetched;
+    private String lastFetchedUser = "";
 
     public VoidTitleScreen() {
         super(Text.literal("VOID CLIENT"));
@@ -49,22 +57,65 @@ public class VoidTitleScreen extends Screen {
         texts.add(new LabelTask(s, x, y, scale, color, shadow, rot));
     }
 
-    private SkinTextures resolveSkin() {
-        if (cachedSkin != null) return cachedSkin;
+    private String getAccountName() {
+        if (client != null && client.getSession() != null) {
+            String name = client.getSession().getUsername();
+            if (name != null && !name.isBlank()) return name;
+        }
+        return "Player";
+    }
+
+    private SkinTextures resolveAccountSkin() {
+        String username = getAccountName();
         var session = client.getSession();
-        if (session == null) return DefaultSkinHelper.getSteve();
+        UUID sessionUuid = (session != null && session.getUuidOrNull() != null)
+                ? session.getUuidOrNull()
+                : UUID.nameUUIDFromBytes(("OfflinePlayer:" + username).getBytes());
 
-        UUID uuid = session.getUuidOrNull();
-        if (uuid == null) uuid = UUID.nameUUIDFromBytes(("OfflinePlayer:" + session.getUsername()).getBytes());
-        GameProfile profile = new GameProfile(uuid, session.getUsername());
+        if (cachedSkin != null && username.equals(lastFetchedUser)) {
+            return cachedSkin;
+        }
 
-        if (!skinFetched) {
-            skinFetched = true;
-            client.getSkinProvider().fetchSkinTextures(profile).thenAccept(opt -> {
-                opt.ifPresent(st -> cachedSkin = st);
+        if (!username.equals(lastFetchedUser)) {
+            lastFetchedUser = username;
+            cachedSkin = null;
+
+            // 1. ลองดึงจาก UUID ปัจจุบันก่อน
+            GameProfile localProfile = new GameProfile(sessionUuid, username);
+            client.getSkinProvider().fetchSkinTextures(localProfile).thenAccept(opt -> {
+                if (opt.isPresent()) cachedSkin = opt.get();
+            });
+
+            // 2. ค้นหา UUID จริงจากชื่อรหัสผ่าน Mojang API (รองรับทั้งไอดีแท้และ Launcher)
+            CompletableFuture.runAsync(() -> {
+                try {
+                    HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+                    HttpRequest req = HttpRequest.newBuilder()
+                            .uri(URI.create("https://mojang.com" + username))
+                            .timeout(Duration.ofSeconds(5))
+                            .GET()
+                            .build();
+                    HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
+                    if (res.statusCode() == 200 && res.body() != null && !res.body().isBlank()) {
+                        var json = JsonParser.parseString(res.body()).getAsJsonObject();
+                        String rawId = json.get("id").getAsString();
+                        String realName = json.get("name").getAsString();
+                        String dashed = rawId.replaceFirst(
+                                "(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})",
+                                "$1-$2-$3-$4-$5"
+                        );
+                        GameProfile realProfile = new GameProfile(UUID.fromString(dashed), realName);
+                        client.execute(() -> {
+                            client.getSkinProvider().fetchSkinTextures(realProfile).thenAccept(opt -> {
+                                opt.ifPresent(st -> cachedSkin = st);
+                            });
+                        });
+                    }
+                } catch (Exception ignored) {}
             });
         }
-        return DefaultSkinHelper.getSkinTextures(profile);
+
+        return DefaultSkinHelper.getSkinTextures(new GameProfile(sessionUuid, username));
     }
 
     private void drawStyledBtn(DrawContext c, int x, int y, int w, int h, String icon, String label, int mx, int my, Runnable action) {
@@ -77,7 +128,6 @@ public class VoidTitleScreen extends Screen {
         Theme.strokeCard(c, x, y, x + w, y + h, rad, fill, border);
 
         c.fill(x + h, y + 3, x + h + 1, y + h - 3, Theme.argb(0.55f, Theme.PURPLE));
-
         addTxt(icon, x + (h - textRenderer.getWidth(icon)) / 2f, y + (h - 8) / 2f, hov ? 0xFFFFFFFF : (0xFF000000 | Theme.PURPLE_LIGHT), false);
 
         int textAreaX = x + h;
@@ -98,9 +148,9 @@ public class VoidTitleScreen extends Screen {
     }
 
     private void drawLeftAccountCard(DrawContext c) {
-        int cardW = 122;
-        int cardH = 152;
-        int cx = Math.max(16, width / 2 - 252);
+        int cardW = 126;
+        int cardH = 154;
+        int cx = Math.max(16, width / 2 - 256);
         int cy = height / 2 - cardH / 2 + 4;
 
         // Outer Neon Glow Card
@@ -109,27 +159,29 @@ public class VoidTitleScreen extends Screen {
 
         // Top Badge
         Theme.rrect(c, cx + 14, cy + 8, cx + cardW - 14, cy + 22, 5, Theme.argb(0.85f, 0x2E1A52));
-        String tag = "YOUR SKIN";
+        String tag = "ACCOUNT";
         addTxt(tag, cx + (cardW - textRenderer.getWidth(tag)) / 2f, cy + 11, 0xFF000000 | Theme.PURPLE_LIGHT, false);
 
-        // Skin Frame (60x60)
-        int skinSize = 60;
+        // Skin Frame (62x62)
+        int skinSize = 62;
         int sx = cx + (cardW - skinSize) / 2;
         int sy = cy + 28;
         Theme.strokeCard(c, sx - 3, sy - 3, sx + skinSize + 3, sy + skinSize + 3, 8, Theme.argb(0.95f, 0x1B1130), Theme.argb(0.9f, Theme.PURPLE_LIGHT));
-        PlayerSkinDrawer.draw(c, resolveSkin(), sx, sy, skinSize);
+        PlayerSkinDrawer.draw(c, resolveAccountSkin(), sx, sy, skinSize);
 
-        // Account Name Plate
-        int plateY = cy + 97;
+        // Account Name Plate (แสดงชื่อรหัสของคนนั้น)
+        int plateY = cy + 98;
         Theme.strokeCard(c, cx + 10, plateY, cx + cardW - 10, plateY + 24, 6, Theme.argb(0.9f, 0x1F1338), Theme.argb(0.85f, Theme.PURPLE));
-        String username = client.getSession() != null ? client.getSession().getUsername() : "Player";
-        if (textRenderer.getWidth(username) > cardW - 26) {
-            username = username.substring(0, Math.min(username.length(), 12)) + "..";
+        String username = getAccountName();
+        String dispName = username;
+        while (dispName.length() > 3 && textRenderer.getWidth(dispName) > cardW - 26) {
+            dispName = dispName.substring(0, dispName.length() - 1);
         }
-        addTxt(username, cx + (cardW - textRenderer.getWidth(username)) / 2f, plateY + 8, 0xFFFFFFFF, true);
+        if (!dispName.equals(username)) dispName += "..";
+        addTxt(dispName, cx + (cardW - textRenderer.getWidth(dispName)) / 2f, plateY + 8, 0xFFFFFFFF, true);
 
-        // Active Status
-        String status = "● Online Account";
+        // Status Line
+        String status = cachedSkin != null ? "● Skin Loaded" : "● Active ID";
         addTxt(status, cx + (cardW - textRenderer.getWidth(status)) / 2f, plateY + 31, 0xFF4ADE80, false);
     }
 
@@ -137,7 +189,6 @@ public class VoidTitleScreen extends Screen {
         hits.clear();
         texts.clear();
 
-        // 1. Background + Violet Night Overlay
         renderPanoramaBackground(c, delta);
         c.fillGradient(0, 0, width, height, Theme.argb(0.68f, 0x090414), Theme.argb(0.84f, 0x180930));
 
@@ -149,7 +200,6 @@ public class VoidTitleScreen extends Screen {
             Theme.rrect(c, sx, sy, sx + sz, sy + sz, sz / 2, Theme.argb(s.a * 0.75f, Theme.PURPLE_LIGHT));
         }
 
-        // 2. Draw all Cards & Buttons FIRST
         drawLeftAccountCard(c);
 
         int centerX = width / 2;
@@ -181,14 +231,29 @@ public class VoidTitleScreen extends Screen {
         drawMiniIconBtn(c, 46, by, bSize, "L", mx, my, () -> client.setScreen(new LanguageOptionsScreen(this, client.options, client.getLanguageManager())));
         drawMiniIconBtn(c, 76, by, bSize, "A", mx, my, () -> client.setScreen(new AccessibilityOptionsScreen(this, client.options)));
 
-        addTxt("Minecraft 1.21.11  |  Void Client v1.0.0", 10, height - 12, 0xFF000000 | Theme.MUTED, true);
+        addTxt("Minecraft 1.21.11  |  Logged in as: " + getAccountName(), 10, height - 12, 0xFF000000 | Theme.MUTED, true);
         String copy = "Copyright Mojang Studios. Do not distribute!";
         addTxt(copy, width - textRenderer.getWidth(copy) - 10, height - 12, 0xFF000000 | Theme.MUTED, true);
 
-        // 3. Render ALL Texts LAST so they appear cleanly on top of every box/button
         var m = c.getMatrices();
         for (LabelTask t : texts) {
             m.pushMatrix();
             m.translate(t.x, t.y);
             if (t.rot != 0f) m.rotate(t.rot);
             if (t.scale != 1.0f) m.scale(t.scale, t.scale);
+            c.drawText(textRenderer, t.text, 0, 0, t.color, t.shadow);
+            m.popMatrix();
+        }
+    }
+
+    @Override public boolean mouseClicked(Click click, boolean doubled) {
+        if (click.button() == 0) {
+            double mx = click.x(), my = click.y();
+            for (int i = hits.size() - 1; i >= 0; i--) {
+                Hit h = hits.get(i);
+                if (mx >= h.x1 && mx <= h.x2 && my >= h.y1 && my <= h.y2) { h.run.run(); return true; }
+            }
+        }
+        return super.mouseClicked(click, doubled);
+    }
+}
