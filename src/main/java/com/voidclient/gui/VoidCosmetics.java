@@ -5,7 +5,7 @@ import com.voidclient.module.ModuleManager;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.render.OverlayTexture;
-import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.texture.NativeImage;
@@ -59,7 +59,7 @@ public final class VoidCosmetics {
                 {4, 7}, {7, 7}, {4, 8}, {7, 8},
                 {5, 9}, {6, 9}, {5, 10}, {6, 10}
         };
-        for (int[] p : vPixels) cape.setColorArgb(p[0], p[1], lightCol);
+        for (int[] p : vPixels) cape.setColorArgb(p, p, lightCol);
         cape.setColorArgb(4, 3, 0xFFC084FC);
         cape.setColorArgb(6, 3, 0xFFC084FC);
         cape.setColorArgb(7, 3, 0xFFC084FC);
@@ -87,7 +87,7 @@ public final class VoidCosmetics {
         float time = (player.age + tickDelta) * 0.18f;
         float flap = MathHelper.sin(time) * 18.0f + (player.isSprinting() ? 14.0f : 0f);
 
-        VertexConsumer vc = buffers.getBuffer(RenderLayer.getEntityTranslucent(WING_TEX));
+        VertexConsumer vc = buffers.getBuffer(RenderLayers.entityTranslucent(WING_TEX));
 
         for (int side = -1; side <= 1; side += 2) {
             matrices.push();
