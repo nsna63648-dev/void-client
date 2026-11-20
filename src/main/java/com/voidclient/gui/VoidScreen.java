@@ -24,7 +24,7 @@ public class VoidScreen extends Screen {
     private record Sl(int x1, int y1, int x2, int y2, float min, float max, Consumer<Float> set) {}
 
     private Nav nav = Nav.ALL_MODS;
-    private Category filterCat = null; // null = All Categories
+    private Category filterCat = null;
     private final long openAt = System.currentTimeMillis();
     private long pageAt = openAt;
     private final List<Hit> hits = new ArrayList<>();
@@ -104,7 +104,6 @@ public class VoidScreen extends Screen {
         float pg = anim ? ease(Math.min(1f, (now - pageAt) / 180f)) : 1f;
         oy = Math.round((1f - g) * 12);
 
-        // Dark backdrop
         c.fillGradient(0, 0, width, height, Theme.argb(0.55f * g, 0x05050A), Theme.argb(0.68f * g, 0x0D0818));
 
         int pw = Math.min(width - 20, 740);
@@ -113,32 +112,22 @@ public class VoidScreen extends Screen {
         left = (width - pw) / 2; top = (height - ph) / 2;
         cur = g;
 
-        // ===== LEFT SIDEBAR (LabyMod Categories Style) =====
         Theme.rrect(c, X(506), Y(318), X(682), Y(762), Math.round(16 * k), Theme.argb(0.22f * g, Theme.PURPLE));
         Theme.strokeCard(c, X(508), Y(320), X(680), Y(760), Math.max(4, Math.round(14 * k)), Theme.argb(0.95f * g, 0x0B0B12), Theme.argb(0.6f * g, Theme.PURPLE));
 
-        // Logo header above sidebar
         glowCard(c, 535, 266, 577, 308, 0x1A1429, Theme.PURPLE);
         txt(c, "V", 547, 273, 28, Theme.PURPLE_LIGHT, 1f);
         txt(c, "VOID", 588, 276, 26, 0xFFFFFF, 1f);
-
         txt(c, "Categories", 594 - tw("Categories", 14) / 2f, 334, 14, Theme.MUTED, 1f);
 
-        float sideY = 358;
-        float sideH = 29;
-        float sideGap = 6;
-
-        // Home Tab
+        float sideY = 358, sideH = 29, sideGap = 6;
         sideY = drawSideItem(c, mx, my, sideY, sideH, "Home", nav == Nav.HOME, () -> {
             nav = Nav.HOME; pageAt = System.currentTimeMillis(); selected = null; searchFocus = false;
         }) + sideGap;
-
-        // All Mods Tab
         sideY = drawSideItem(c, mx, my, sideY, sideH, "All Mods", nav == Nav.ALL_MODS && filterCat == null, () -> {
             nav = Nav.ALL_MODS; filterCat = null; pageAt = System.currentTimeMillis(); scroll = 0; selected = null;
         }) + sideGap;
 
-        // Dynamic Categories from Category.values()
         for (Category cat : Category.values()) {
             boolean isSel = (nav == Nav.ALL_MODS && filterCat == cat);
             sideY = drawSideItem(c, mx, my, sideY, sideH, cat.label, isSel, () -> {
@@ -146,38 +135,28 @@ public class VoidScreen extends Screen {
             }) + sideGap;
         }
 
-        // Bottom Sidebar Buttons (HUD & Settings)
         drawSideItem(c, mx, my, 684, sideH, "Edit HUD", false, () -> client.setScreen(new HudEditScreen()));
         drawSideItem(c, mx, my, 719, sideH, "Settings", nav == Nav.SETTINGS, () -> {
             nav = Nav.SETTINGS; pageAt = System.currentTimeMillis(); selected = null; searchFocus = false;
         });
 
-        // ===== MAIN RIGHT PANEL (LabyMod Grid Container) =====
         Theme.rrect(c, X(694), Y(256), X(1414), Y(824), Math.round(18 * k), Theme.argb(0.22f * g, Theme.PURPLE));
         Theme.strokeCard(c, X(696), Y(258), X(1412), Y(822), Math.max(4, Math.round(16 * k)), Theme.argb(0.96f * g, 0x09090F), Theme.argb(0.65f * g, Theme.PURPLE));
 
-        // Top Bar: Search Input + Quick Action Buttons
         if (searchFocus) glowCard(c, 714, 274, 1110, 312, 0x201934, Theme.PURPLE);
         else card(c, 714, 274, 1110, 312, Theme.CARD2, 1f);
         String sText = search.isEmpty() ? "Search mods..." : search + (System.currentTimeMillis() / 500 % 2 == 0 ? "|" : "");
         txt(c, sText, 730, 285, 16, search.isEmpty() ? Theme.MUTED : 0xFFFFFF, 1f);
-        hits.add(new Hit(X(714), Y(274), X(1110), Y(312), () -> {
-            nav = Nav.ALL_MODS; searchFocus = true;
-        }));
+        hits.add(new Hit(X(714), Y(274), X(1110), Y(312), () -> { nav = Nav.ALL_MODS; searchFocus = true; }));
 
-        // Quick HUD & Close buttons on top right
         btn(c, 1122, 274, 1280, 312, "Edit HUD Widgets", 13, true, mx, my, () -> client.setScreen(new HudEditScreen()));
         btn(c, 1290, 274, 1352, 312, "Home", 13, nav == Nav.HOME, mx, my, () -> { nav = Nav.HOME; pageAt = System.currentTimeMillis(); });
         btn(c, 1360, 274, 1394, 312, "X", 15, false, mx, my, this::close);
 
         cur = g * pg;
-        if (nav == Nav.HOME) {
-            home(c, mx, my);
-        } else if (nav == Nav.SETTINGS) {
-            settings(c, mx, my);
-        } else {
-            gridMods(c, mx, my);
-        }
+        if (nav == Nav.HOME) home(c, mx, my);
+        else if (nav == Nav.SETTINGS) settings(c, mx, my);
+        else gridMods(c, mx, my);
     }
 
     private float drawSideItem(DrawContext c, int mx, int my, float y1, float h, String label, boolean activeItem, Runnable onClick) {
@@ -185,19 +164,178 @@ public class VoidScreen extends Screen {
         int a = X(x1), b = Y(y1), d = X(x2), e = Y(y2);
         boolean hov = mx >= a && mx <= d && my >= b && my <= e;
         int rad = Math.max(3, Math.round(8 * k));
-
-        if (activeItem) {
-            Theme.strokeCard(c, a, b, d, e, rad, Theme.argb(cur, 0x261B42), Theme.argb(0.95f * cur, Theme.PURPLE_LIGHT));
-        } else if (hov) {
-            Theme.strokeCard(c, a, b, d, e, rad, Theme.argb(cur, 0x1E1E2A), Theme.argb(0.65f * cur, Theme.PURPLE));
-        } else {
-            Theme.strokeCard(c, a, b, d, e, rad, Theme.argb(cur, Theme.CARD2), Theme.argb(0.45f * cur, Theme.BORDER));
-        }
-
+        if (activeItem) Theme.strokeCard(c, a, b, d, e, rad, Theme.argb(cur, 0x261B42), Theme.argb(0.95f * cur, Theme.PURPLE_LIGHT));
+        else if (hov) Theme.strokeCard(c, a, b, d, e, rad, Theme.argb(cur, 0x1E1E2A), Theme.argb(0.65f * cur, Theme.PURPLE));
+        else Theme.strokeCard(c, a, b, d, e, rad, Theme.argb(cur, Theme.CARD2), Theme.argb(0.45f * cur, Theme.BORDER));
         txt(c, label, (x1 + x2) / 2f - tw(label, 14) / 2f, y1 + (h - 14) / 2f, 14, activeItem ? 0xFFFFFF : 0xD0D0DC, 1f);
         hits.add(new Hit(a, b, d, e, onClick));
         return y2;
     }
-
     private List<Module> filtered() {
         List<Module> out = new ArrayList<>();
+        String q = search.toLowerCase();
+        for (Module m : ModuleManager.ALL) {
+            if (filterCat != null && m.cat != filterCat) continue;
+            if (!q.isEmpty() && !(m.name.toLowerCase().contains(q) || m.cat.label.toLowerCase().contains(q) || m.desc.toLowerCase().contains(q))) continue;
+            out.add(m);
+        }
+        return out;
+    }
+
+    private void gridMods(DrawContext c, int mx, int my) {
+        String headerTitle = filterCat == null ? "All Modifications" : filterCat.label;
+        txt(c, headerTitle, 718, 326, 16, Theme.MUTED, 1f);
+
+        String curPreset = VoidConfig.data.preset;
+        btn(c, 1020, 322, 1090, 346, "FPS Low", 11, "LOW".equals(curPreset), mx, my, () -> FpsPresets.apply("LOW"));
+        btn(c, 1096, 322, 1178, 346, "FPS High", 11, "HIGH".equals(curPreset), mx, my, () -> FpsPresets.apply("HIGH"));
+        btn(c, 1184, 322, 1284, 346, "Crystal Preset", 11, false, mx, my, () -> ModuleManager.cpvpPreset(true));
+        btn(c, 1290, 322, 1390, 346, "Anchor Preset", 11, false, mx, my, () -> ModuleManager.cpvpPreset(false));
+
+        List<Module> mods = filtered();
+        final int cols = 4;
+        final float gridX = 716, gridY = 356, gridW = 666, viewBottom = 730, gap = 12;
+        final float cardW = (gridW - gap * (cols - 1)) / cols, cardH = 112;
+
+        int rows = (int) Math.ceil(mods.size() / (double) cols);
+        float contentH = rows * (cardH + gap);
+        float viewH = viewBottom - gridY;
+        float maxScroll = Math.max(0, contentH - viewH);
+        scroll = Math.max(0, Math.min(maxScroll, scroll));
+
+        c.enableScissor(X(710), Y(gridY), X(1390), Y(viewBottom));
+        for (int i = 0; i < mods.size(); i++) {
+            Module m = mods.get(i);
+            int r = i / cols, col = i % cols;
+            float cx1 = gridX + col * (cardW + gap);
+            float cy1 = gridY + r * (cardH + gap) - scroll;
+            float cx2 = cx1 + cardW, cy2 = cy1 + cardH;
+
+            if (cy2 < gridY || cy1 > viewBottom) continue;
+
+            boolean isSel = (m == selected);
+            if (isSel) glowCard(c, cx1, cy1, cx2, cy2, 0x201836, Theme.PURPLE_LIGHT);
+            else if (m.enabled()) glowCard(c, cx1, cy1, cx2, cy2, 0x171424, Theme.PURPLE);
+            else card(c, cx1, cy1, cx2, cy2, Theme.CARD2, 1f);
+
+            String tag = m.cat.label.length() > 7 ? m.cat.label.substring(0, 7).toUpperCase() : m.cat.label.toUpperCase();
+            float badgeW = tw(tag, 9) + 10;
+            Theme.rrect(c, X(cx2 - badgeW - 6), Y(cy1 + 6), X(cx2 - 6), Y(cy1 + 19), 4, Theme.argb(cur, 0x2B1E4A));
+            txt(c, tag, cx2 - badgeW - 1, cy1 + 8, 9, Theme.PURPLE_LIGHT, 1f);
+
+            float midX = (cx1 + cx2) / 2f;
+            glowCard(c, midX - 18, cy1 + 18, midX + 18, cy1 + 54, 0x22193B, m.enabled() ? Theme.PURPLE : Theme.BORDER);
+            txt(c, m.cat.icon, midX - tw(m.cat.icon, 18) / 2f, cy1 + 27, 18, m.enabled() ? Theme.PURPLE_LIGHT : 0xB8B8C8, 1f);
+
+            String dispName = m.name;
+            if (tw(dispName, 13) > cardW - 14) dispName = dispName.substring(0, Math.min(dispName.length(), 15)) + "..";
+            txt(c, dispName, midX - tw(dispName, 13) / 2f, cy1 + 62, 13, 0xFFFFFF, 1f);
+
+            boolean hasOpts = m.isHud() || !m.settings.isEmpty();
+            float barY1 = cy2 - 26, barY2 = cy2 - 6;
+
+            if (cy1 >= gridY - 20 && cy2 <= viewBottom + 20) {
+                if (hasOpts) {
+                    float splitX = cx1 + (cardW - 16) * 0.60f + 6;
+                    drawMiniToggle(c, mx, my, cx1 + 6, barY1, splitX - 2, barY2, m);
+                    drawMiniOpt(c, mx, my, splitX + 2, barY1, cx2 - 6, barY2, isSel, () -> selected = (selected == m ? null : m));
+                } else {
+                    drawMiniToggle(c, mx, my, cx1 + 6, barY1, cx2 - 6, barY2, m);
+                }
+                hits.add(new Hit(X(cx1), Y(cy1), X(cx2), Y(barY1 - 2), () -> selected = m));
+            }
+        }
+        c.disableScissor();
+
+        if (maxScroll > 0) {
+            int sbX1 = X(1392), sbX2 = X(1397), sbY1 = Y(gridY), sbY2 = Y(viewBottom);
+            Theme.rrect(c, sbX1, sbY1, sbX2, sbY2, 2, Theme.argb(0.4f * cur, Theme.BORDER));
+            float ratio = viewH / contentH;
+            int thumbH = Math.max(18, Math.round((sbY2 - sbY1) * ratio));
+            int thumbY = sbY1 + Math.round(((sbY2 - sbY1) - thumbH) * (scroll / maxScroll));
+            Theme.rrect(c, sbX1, thumbY, sbX2, thumbY + thumbH, 2, Theme.argb(0.9f * cur, Theme.PURPLE));
+        }
+
+        if (mods.isEmpty()) txt(c, "No mods found matching your filter.", 720, 380, 16, Theme.MUTED, 1f);
+
+        card(c, 714, 738, 1394, 806, Theme.CARD2, 1f);
+        if (selected == null) {
+            txt(c, "Click any mod card or 'Opt >' to adjust settings, scale, and opacity.", 732, 765, 14, Theme.MUTED, 1f);
+        } else {
+            txt(c, selected.name + ": " + selected.desc, 732, 745, 12, Theme.PURPLE_LIGHT, 1f);
+            int col = 0;
+            List<Float> xs = List.of(732f, 956f, 1180f);
+            final Module m = selected;
+            if (m.isHud() && col < 3) {
+                float xPos = xs.get(col);
+                slider(c, xPos, 762, xPos + 200, "Scale", m.s.scale, 0.5f, 2f, v -> m.s.scale = v); col++;
+            }
+            if (m.isHud() && col < 3) {
+                float xPos = xs.get(col);
+                slider(c, xPos, 762, xPos + 200, "Opacity", m.s.opacity, 0.2f, 1f, v -> m.s.opacity = v); col++;
+            }
+            for (Setting st : m.settings) {
+                if (col >= 3) break;
+                float xPos = xs.get(col);
+                slider(c, xPos, 762, xPos + 200, st.label(), m.val(st.key(), st.def()), st.min(), st.max(), v -> m.set(st.key(), v)); col++;
+            }
+            if (col == 0) txt(c, "No extra sliders for this mod.", 732, 768, 13, Theme.MUTED, 1f);
+        }
+    }
+
+    private void drawMiniToggle(DrawContext c, int mx, int my, float x1, float y1, float x2, float y2, Module m) {
+        int a = X(x1), b = Y(y1), d = X(x2), e = Y(y2);
+        boolean hov = mx >= a && mx <= d && my >= b && my <= e;
+        int rad = Math.max(2, Math.round(6 * k));
+        if (m.enabled()) Theme.strokeCard(c, a, b, d, e, rad, Theme.argb(cur, hov ? 0x9333EA : 0x7C3AED), Theme.argb(0.85f * cur, Theme.PURPLE_LIGHT));
+        else Theme.strokeCard(c, a, b, d, e, rad, Theme.argb(cur, hov ? 0x2B2B3B : 0x1E1E28), Theme.argb(0.6f * cur, Theme.BORDER));
+        String lbl = m.enabled() ? "ON" : "OFF";
+        txt(c, lbl, (x1 + x2) / 2f - tw(lbl, 11) / 2f, (y1 + y2) / 2f - 5.5f, 11, m.enabled() ? 0xFFFFFF : Theme.MUTED, 1f);
+        hits.add(new Hit(a, b, d, e, () -> { m.setEnabled(!m.enabled()); VoidConfig.save(); }));
+    }
+
+    private void drawMiniOpt(DrawContext c, int mx, int my, float x1, float y1, float x2, float y2, boolean isSel, Runnable run) {
+        int a = X(x1), b = Y(y1), d = X(x2), e = Y(y2);
+        boolean hov = mx >= a && mx <= d && my >= b && my <= e;
+        int rad = Math.max(2, Math.round(6 * k));
+        Theme.strokeCard(c, a, b, d, e, rad, Theme.argb(cur, (hov || isSel) ? 0x2E2447 : 0x1E1E28), Theme.argb(0.7f * cur, (hov || isSel) ? Theme.PURPLE_LIGHT : Theme.BORDER));
+        String lbl = "Opt >";
+        txt(c, lbl, (x1 + x2) / 2f - tw(lbl, 10) / 2f, (y1 + y2) / 2f - 5f, 10, 0xFFFFFF, 1f);
+        hits.add(new Hit(a, b, d, e, run));
+    }
+
+    private void home(DrawContext c, int mx, int my) {
+        int h = LocalTime.now().getHour();
+        String greet = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+        String name = client.getSession() != null ? client.getSession().getUsername() : "Player";
+
+        card(c, 718, 336, 1130, 530, Theme.CARD2, 1f);
+        txt(c, greet + ", " + name + " !", 742, 358, 26, 0xFFFFFF, 1f);
+        boolean inWorld = client.world != null;
+        btn(c, 742, 412, 1106, 470, inWorld ? "RESUME GAME" : "PLAY MINECRAFT", 22, true, mx, my, () -> {
+            if (inWorld) close(); else client.setScreen(new SelectWorldScreen(this));
+        });
+        String mcv = "Minecraft 1.21.11 - Fabric";
+        txt(c, mcv, 924 - tw(mcv, 14) / 2f, 494, 14, Theme.MUTED, 1f);
+
+        card(c, 1148, 336, 1390, 530, Theme.CARD2, 1f);
+        txt(c, "Client Version", 1168, 358, 18, Theme.MUTED, 1f);
+        txt(c, "v1.0.0", 1168, 390, 38, 0xFFFFFF, 1f);
+        btn(c, 1168, 476, 1370, 512, "Browse All Mods", 14, true, mx, my, () -> { nav = Nav.ALL_MODS; filterCat = null; pageAt = System.currentTimeMillis(); });
+
+        card(c, 718, 550, 1390, 795, Theme.CARD2, 1f);
+        glowCard(c, 742, 580, 824, 670, 0x241B3A, Theme.PURPLE);
+        txt(c, "VC", 783 - tw("VC", 30) / 2f, 608, 30, Theme.PURPLE_LIGHT, 1f);
+        txt(c, "Join our community !", 848, 576, 26, 0xFFFFFF, 1f);
+        txt(c, "For support, presets and updates from the VOID community.", 848, 616, 15, Theme.MUTED, 1f);
+        String url = VoidConfig.data.discordUrl;
+        btn(c, 848, 650, 930, 682, "Join >", 14, true, mx, my, () -> { if (url != null && !url.isBlank()) Util.getOperatingSystem().open(url); });
+        if (url == null || url.isBlank()) txt(c, "(ใส่ discordUrl ใน config/voidclient.json)", 946, 658, 12, Theme.MUTED, 1f);
+    }
+
+    private void settings(DrawContext c, int mx, int my) {
+        txt(c, "Client Settings", 718, 334, 24, 0xFFFFFF, 1f);
+        btn(c, 718, 380, 980, 428, "Edit HUD Layout", 17, true, mx, my, () -> client.setScreen(new HudEditScreen()));
+        btn(c, 1000, 380, 1262, 428, "Reset All Settings", 17, false, mx, my, () -> { ModuleManager.resetAll(); selected = null; });
+        txt(c, "Menu key: RIGHT SHIFT  (เปลี่ยนได้ใน Options > Controls > VOID CLIENT)", 720, 456, 15, 0xFFFFFF, 1f);
+        txt(c, "Minecraft 1.21.11  |  Fabric  |  Java 21", 720, 488, 15, Theme.MUTED, 1f);
