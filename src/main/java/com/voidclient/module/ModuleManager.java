@@ -33,6 +33,7 @@ public final class ModuleManager {
     public static final ArrayDeque<Long> LMB = new ArrayDeque<>(), RMB = new ArrayDeque<>();
 
     private static Module fullbright, gamma, crosshair, seeInvisibles, itemEsp, mobEsp, playerEsp, memoryOpt, animOpt;
+    private static BlockESP blockEsp;
     private static Module combatTimerMod, lastDamageMod, dmgIndMod, nearbyMod;
     private static final List<Module> particleCutters = new ArrayList<>();
     private static final Random RNG = new Random();
@@ -91,6 +92,7 @@ public final class ModuleManager {
         itemEsp = add(new Toggle("itemesp", "Item ESP", "แสดงเส้นขอบเรืองแสงให้สิ่งของที่ตกพื้น", VISUAL, false, null));
         mobEsp = add(new Toggle("mobesp", "Entity / Mob ESP", "แสดงเส้นขอบเรืองแสงให้สัตว์และมอนสเตอร์", VISUAL, false, null));
         playerEsp = add(new Toggle("playeresp", "Player ESP", "แสดงเส้นขอบเรืองแสงให้ผู้เล่นอื่น", VISUAL, false, null));
+        blockEsp = add(new BlockESP());
 
         fullbright = add(new Toggle("fullbright", "Fullbright", "เพิ่มความสว่างในพื้นที่มืด", VISUAL, false, null));
         gamma = add(new Toggle("gamma", "Gamma Control", "ปรับระดับความสว่าง", VISUAL, false, null))
@@ -339,6 +341,7 @@ public final class ModuleManager {
     public static boolean itemEspOn() { return itemEsp != null && itemEsp.enabled(); }
     public static boolean mobEspOn() { return mobEsp != null && mobEsp.enabled(); }
     public static boolean playerEspOn() { return playerEsp != null && playerEsp.enabled(); }
+    public static BlockESP blockEsp() { return blockEsp; }
 
     public static boolean dropParticle(ParticleEffect effect) {
         if (effect.getType() == ParticleTypes.EXPLOSION || effect.getType() == ParticleTypes.EXPLOSION_EMITTER) {
