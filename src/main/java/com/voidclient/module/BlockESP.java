@@ -7,10 +7,9 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.VertexRendering;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.registry.Registries;
@@ -20,7 +19,7 @@ import net.minecraft.util.math.ChunkSectionPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.chunk.ChunkSection;
 import net.minecraft.world.chunk.WorldChunk;
-import org.joml.Vector3f;
+import org.joml.Matrix4f;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -46,8 +45,8 @@ public final class BlockESP extends Module {
     public record BlockInfo(String id, String name, String key) {}
 
     private static final int MAX_STORE = 6000;
-    private static final int MAX_DRAW = 1500;
-    private static final int MAX_TRACERS = 256;
+    private static final int MAX_DRAW = 800;
+    private static final int MAX_TRACERS = 128;
     private static final long BUDGET_NS = 1_200_000L;
     private static final int RESCAN_TICKS = 40;
     private static final int REBUILD_TICKS = 5;
@@ -353,36 +352,102 @@ public final class BlockESP extends Module {
         if (ms == null || vcp == null) return;
 
         Vec3d cam = mc.gameRenderer.getCamera().getCameraPos();
+        Matrix4f m = ms.peek().getPositionMatrix();
 
         float r = val("r", 0.70f), g = val("g", 0.30f), b = val("b", 1.00f), a = val("a", 0.25f);
         boolean tracer = tracerOn();
+        int fillCol = argb(r, g, b, a);
+        int lineCol = argb(r, g, b, 0.90f);
 
-        VertexConsumer fill = vcp.getBuffer(RenderLayer.getDebugFilledBox());
-        VertexConsumer lines = vcp.getBuffer(RenderLayer.getLines());
+        // ทุกอย่างวาดเป็น quad ใน layer เดียว (ไม่พึ่ง VertexRendering / lines layer ที่เปลี่ยนใน 1.21.11)
+        VertexConsumer vc = vcp.getBuffer(RenderLayers.getDebugQuads());
 
-        int argb = (Math.round(0.9f * 255) << 24) | (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
         Vec3d look = mc.player.getRotationVec(1f);
-        Vector3f origin = new Vector3f((float) look.x * 0.4f, (float) look.y * 0.4f, (float) look.z * 0.4f);
+        float ox = (float) look.x * 0.5f, oy = (float) look.y * 0.5f, oz = (float) look.z * 0.5f;
 
-        final double e = 0.002;
+        final float e = 0.002f;
         int tracers = 0;
         for (int i = 0; i < drawN; i++) {
             long p = draw[i];
-            double x = BlockPos.unpackLongX(p) - cam.x, y = BlockPos.unpackLongY(p) - cam.y, z = BlockPos.unpackLongZ(p) - cam.z;
+            float x0 = (float) (BlockPos.unpackLongX(p) - cam.x) - e;
+            float y0 = (float) (BlockPos.unpackLongY(p) - cam.y) - e;
+            float z0 = (float) (BlockPos.unpackLongZ(p) - cam.z) - e;
+            float x1 = x0 + 1 + 2 * e, y1 = y0 + 1 + 2 * e, z1 = z0 + 1 + 2 * e;
 
-            if (a > 0.005f) VertexRendering.drawFilledBox(ms, fill, x - e, y - e, z - e, x + 1 + e, y + 1 + e, z + 1 + e, r, g, b, a);
-            VertexRendering.drawBox(ms, lines, x - e, y - e, z - e, x + 1 + e, y + 1 + e, z + 1 + e, r, g, b, 0.9f);
+            float cx = (x0 + x1) * 0.5f, cy = (y0 + y1) * 0.5f, cz = (z0 + z1) * 0.5f;
+            float dist = (float) Math.sqrt(cx * cx + cy * cy + cz * cz);
+            float hw = 0.012f + 0.0022f * dist;
+
+            if (a > 0.005f) {
+                // down, up, north, south, west, east (CCW เมื่อมองจากข้างนอก)
+                quad(vc, m, fillCol, x0, y0, z1, x0, y0, z0, x1, y0, z0, x1, y0, z1);
+                quad(vc, m, fillCol, x0, y1, z0, x0, y1, z1, x1, y1, z1, x1, y1, z0);
+                quad(vc, m, fillCol, x1, y0, z0, x0, y0, z0, x0, y1, z0, x1, y1, z0);
+                quad(vc, m, fillCol, x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1);
+                quad(vc, m, fillCol, x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0);
+                quad(vc, m, fillCol, x1, y0, z1, x1, y0, z0, x1, y1, z0, x1, y1, z1);
+            }
+
+            // outline: 12 edges เป็น ribbon หันเข้าหากล้อง
+            for (int yi = 0; yi < 2; yi++) {
+                float yy = yi == 0 ? y0 : y1;
+                for (int zi = 0; zi < 2; zi++) {
+                    float zz = zi == 0 ? z0 : z1;
+                    ribbon(vc, m, lineCol, x0, yy, zz, x1, yy, zz, hw);
+                }
+            }
+            for (int xi = 0; xi < 2; xi++) {
+                float xx = xi == 0 ? x0 : x1;
+                for (int zi = 0; zi < 2; zi++) {
+                    float zz = zi == 0 ? z0 : z1;
+                    ribbon(vc, m, lineCol, xx, y0, zz, xx, y1, zz, hw);
+                }
+                for (int yi = 0; yi < 2; yi++) {
+                    float yy = yi == 0 ? y0 : y1;
+                    ribbon(vc, m, lineCol, xx, yy, z0, xx, yy, z1, hw);
+                }
+            }
 
             if (tracer && tracers < MAX_TRACERS) {
                 tracers++;
-                Vec3d vec = new Vec3d(x + 0.5 - origin.x, y + 0.5 - origin.y, z + 0.5 - origin.z);
-                VertexRendering.drawVector(ms, lines, origin, vec, argb);
+                ribbon(vc, m, lineCol, ox, oy, oz, cx, cy, cz, hw);
             }
         }
+    }
 
-        if (vcp instanceof VertexConsumerProvider.Immediate imm) {
-            imm.draw(RenderLayer.getDebugFilledBox());
-            imm.draw(RenderLayer.getLines());
-        }
+    private static int argb(float r, float g, float b, float a) {
+        return (Math.round(clamp(a) * 255) << 24) | (Math.round(clamp(r) * 255) << 16)
+                | (Math.round(clamp(g) * 255) << 8) | Math.round(clamp(b) * 255);
+    }
+
+    private static float clamp(float v) { return v < 0f ? 0f : Math.min(v, 1f); }
+
+    private static void vert(VertexConsumer vc, Matrix4f m, int col, float x, float y, float z) {
+        vc.vertex(m, x, y, z).color(col);
+    }
+
+    private static void quad(VertexConsumer vc, Matrix4f m, int col,
+                             float ax, float ay, float az, float bx, float by, float bz,
+                             float cx, float cy, float cz, float dx, float dy, float dz) {
+        vert(vc, m, col, ax, ay, az);
+        vert(vc, m, col, bx, by, bz);
+        vert(vc, m, col, cx, cy, cz);
+        vert(vc, m, col, dx, dy, dz);
+    }
+
+    /** เส้นหนา hw*2 หันเข้าหากล้อง (กล้องอยู่ที่ origin ในพิกัดนี้) */
+    private static void ribbon(VertexConsumer vc, Matrix4f m, int col,
+                               float ax, float ay, float az, float bx, float by, float bz, float hw) {
+        float dx = bx - ax, dy = by - ay, dz = bz - az;
+        float mx = (ax + bx) * 0.5f, my = (ay + by) * 0.5f, mz = (az + bz) * 0.5f;
+        float sx = dy * mz - dz * my, sy = dz * mx - dx * mz, sz = dx * my - dy * mx; // d x mid
+        float len = (float) Math.sqrt(sx * sx + sy * sy + sz * sz);
+        if (len < 1e-6f) return;
+        float k = hw / len;
+        sx *= k; sy *= k; sz *= k;
+        vert(vc, m, col, ax + sx, ay + sy, az + sz);
+        vert(vc, m, col, ax - sx, ay - sy, az - sz);
+        vert(vc, m, col, bx - sx, by - sy, bz - sz);
+        vert(vc, m, col, bx + sx, by + sy, bz + sz);
     }
 }
