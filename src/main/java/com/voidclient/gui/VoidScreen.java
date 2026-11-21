@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 public class VoidScreen extends Screen {
-    private enum Nav { HOME, ALL_MODS, SETTINGS }
+    private enum Nav { HOME, ALL_MODS, SETTINGS, BLOCKESP }
     private record Hit(int x1, int y1, int x2, int y2, Runnable run) {}
     private record Sl(int x1, int y1, int x2, int y2, float min, float max, Consumer<Float> set) {}
     private record SideItem(String label, float y, boolean active, Runnable run) {}
@@ -38,6 +38,12 @@ public class VoidScreen extends Screen {
     private String search = "";
     private boolean searchFocus;
     private Module selected;
+
+    // ---- BlockESP page ----
+    private List<BlockESP.BlockInfo> blockView = List.of();
+    private String blockViewQuery = null;
+    private boolean blockViewDirty = true;
+    private boolean onlySelected = false;
 
     // ---- scrolling (smooth) ----
     private float scroll, scrollTarget, lastMaxScroll;
@@ -258,9 +264,10 @@ public class VoidScreen extends Screen {
                 lerpRgb(0x1D1730, 0x261C42, sf), 0x0F0F18, 0.92f);
         String shown = search;
         while (shown.length() > 1 && tw(shown, 16) > 330) shown = shown.substring(1);
-        String sText = search.isEmpty() ? "Search mods..." : shown + (now / 500 % 2 == 0 && searchFocus ? "|" : "");
+        String placeholder = nav == Nav.BLOCKESP ? "Search blocks..." : "Search mods...";
+        String sText = search.isEmpty() ? placeholder : shown + (now / 500 % 2 == 0 && searchFocus ? "|" : "");
         txt(c, sText, 730, 285, 16, search.isEmpty() ? Theme.MUTED : 0xFFFFFF, 1f);
-        addHit(X(714), Y(274), X(1110), Y(312), () -> { nav = Nav.ALL_MODS; searchFocus = true; });
+        addHit(X(714), Y(274), X(1110), Y(312), () -> { if (nav != Nav.BLOCKESP) nav = Nav.ALL_MODS; searchFocus = true; });
 
         // clear (X) button
         if (!search.isEmpty()) {
@@ -283,6 +290,7 @@ public class VoidScreen extends Screen {
         try {
             if (nav == Nav.HOME) home(c, mx, my);
             else if (nav == Nav.SETTINGS) settings(c, mx, my);
+            else if (nav == Nav.BLOCKESP) blockEspPage(c, mx, my);
             else gridMods(c, mx, my);
         } catch (Throwable t) {
             if (!errLogged) { errLogged = true; System.err.println("[VOID] UI render error: " + t); t.printStackTrace(); }
@@ -308,7 +316,7 @@ public class VoidScreen extends Screen {
         }));
         sy += sideH + sideGap;
         for (Category cat : Category.values()) {
-            boolean isSel = (nav == Nav.ALL_MODS && filterCat == cat);
+            boolean isSel = (nav == Nav.ALL_MODS && filterCat == cat) || (nav == Nav.BLOCKESP && cat == Category.VISUAL);
             items.add(new SideItem(cat.label, sy, isSel, () -> {
                 nav = Nav.ALL_MODS; filterCat = cat; pageAt = System.currentTimeMillis(); scroll = scrollTarget = 0; selected = null;
             }));
@@ -366,6 +374,16 @@ public class VoidScreen extends Screen {
             out.add(m);
         }
         return out;
+    }
+
+    private void openBlockEsp() {
+        nav = Nav.BLOCKESP;
+        pageAt = System.currentTimeMillis();
+        scroll = scrollTarget = 0;
+        search = "";
+        searchFocus = false;
+        selected = null;
+        blockViewDirty = true;
     }
 
     private void gridMods(DrawContext c, int mx, int my) {
@@ -440,16 +458,19 @@ public class VoidScreen extends Screen {
                 txt(c, dispName, midX - tw(dispName, 13) / 2f, y1 + 62, 13, 0xFFFFFF, 1f);
 
                 boolean hasOpts = m.isHud() || !m.settings.isEmpty();
+                boolean isBlockEsp = m instanceof BlockESP;
                 float barY1 = y2 - 26, barY2 = y2 - 6;
 
                 if (hasOpts) {
                     float splitX = cx1 + (cardW - 16) * 0.60f + 6;
                     drawMiniToggle(c, mx, my, cx1 + 6, barY1, splitX - 2, barY2, m, on);
-                    drawMiniOpt(c, mx, my, splitX + 2, barY1, cx2 - 6, barY2, m, isSel, () -> selected = (selected == m ? null : m));
+                    Runnable optRun = isBlockEsp ? this::openBlockEsp : () -> selected = (selected == m ? null : m);
+                    drawMiniOpt(c, mx, my, splitX + 2, barY1, cx2 - 6, barY2, m, isSel, optRun);
                 } else {
                     drawMiniToggle(c, mx, my, cx1 + 6, barY1, cx2 - 6, barY2, m, on);
                 }
-                addHit(X(cx1), Y(cy1), X(cx2), Y(barY1 - 2), () -> selected = m);
+                Runnable bodyRun = isBlockEsp ? this::openBlockEsp : () -> selected = m;
+                addHit(X(cx1), Y(cy1), X(cx2), Y(barY1 - 2), bodyRun);
             }
         } finally {
             c.disableScissor();
@@ -515,6 +536,133 @@ public class VoidScreen extends Screen {
         String lbl = "Opt >";
         txt(c, lbl, (x1 + x2) / 2f - tw(lbl, 10) / 2f, (y1 + y2) / 2f - 5f, 10, 0xFFFFFF, 1f);
         addHit(a, b, d, e, run);
+    }
+
+    // =====================================================================
+    //  BlockESP page (block picker + color/range/tracer)
+    // =====================================================================
+
+    /** Cached, filtered block list. Rebuilt only when the query / selection filter changes. */
+    private List<BlockESP.BlockInfo> blockView(BlockESP esp) {
+        if (blockViewDirty || !search.equals(blockViewQuery)) {
+            String q = search.toLowerCase().trim();
+            List<BlockESP.BlockInfo> out = new ArrayList<>();
+            for (BlockESP.BlockInfo b : BlockESP.catalog()) {
+                if (onlySelected && !esp.has(b.id())) continue;
+                if (!q.isEmpty() && !b.key().contains(q)) continue;
+                out.add(b);
+            }
+            blockView = out;
+            blockViewQuery = search;
+            blockViewDirty = false;
+        }
+        return blockView;
+    }
+
+    private void blockEspPage(DrawContext c, int mx, int my) {
+        final BlockESP esp = ModuleManager.blockEsp();
+        if (esp == null) { txt(c, "BlockESP not loaded.", 718, 340, 16, 0xFF6B6B, 1f); return; }
+
+        txt(c, "Block ESP", 718, 326, 16, Theme.PURPLE_LIGHT, 1f);
+
+        final boolean tr = esp.tracerOn();
+        final boolean en = esp.enabled();
+        btn(c, 1020, 322, 1124, 346, "Tracer: " + (tr ? "ON" : "OFF"), 11, tr, mx, my,
+                () -> { esp.set("tracer", tr ? 0f : 1f); ModuleManager.requestSave(); });
+        btn(c, 1130, 322, 1234, 346, "ESP: " + (en ? "ON" : "OFF"), 11, en, mx, my,
+                () -> { esp.setEnabled(!esp.enabled()); ModuleManager.requestSave(); });
+        btn(c, 1290, 322, 1390, 346, "< Back", 11, false, mx, my, () -> {
+            nav = Nav.ALL_MODS; filterCat = Category.VISUAL; pageAt = System.currentTimeMillis();
+            scroll = scrollTarget = 0; search = ""; searchFocus = false;
+        });
+
+        // ---- sliders: range + color + alpha ----
+        float sx = 718, sw = 110, step = 124;
+        slider(c, sx,            356, sx + sw,            "Range", esp.val("range", 64f), 8f, 128f, v -> esp.set("range", v));
+        slider(c, sx + step,     356, sx + step + sw,     "Red",   esp.val("r", 0.70f), 0f, 1f, v -> esp.set("r", v));
+        slider(c, sx + step * 2, 356, sx + step * 2 + sw, "Green", esp.val("g", 0.30f), 0f, 1f, v -> esp.set("g", v));
+        slider(c, sx + step * 3, 356, sx + step * 3 + sw, "Blue",  esp.val("b", 1.00f), 0f, 1f, v -> esp.set("b", v));
+        slider(c, sx + step * 4, 356, sx + step * 4 + sw, "Alpha", esp.val("a", 0.25f), 0f, 1f, v -> esp.set("a", v));
+
+        // color preview
+        int rgb = (Math.round(clamp01(esp.val("r", 0.70f)) * 255) << 16)
+                | (Math.round(clamp01(esp.val("g", 0.30f)) * 255) << 8)
+                | Math.round(clamp01(esp.val("b", 1.00f)) * 255);
+        txt(c, "Color", 1338, 356, 13, 0xFFFFFF, 0.95f);
+        Theme.rrect(c, X(1338), Y(378), X(1390), Y(392), radius(5, 2), Theme.argb(cur, rgb));
+
+        // ---- info row ----
+        txt(c, "Selected: " + esp.selectedCount() + " blocks   |   click a block to add / remove", 718, 406, 12, Theme.MUTED, 1f);
+        btn(c, 1130, 400, 1280, 422, onlySelected ? "Show: Selected" : "Show: All", 10, onlySelected, mx, my,
+                () -> { onlySelected = !onlySelected; blockViewDirty = true; scroll = scrollTarget = 0; });
+        btn(c, 1290, 400, 1390, 422, "Clear all", 10, false, mx, my,
+                () -> { esp.clearBlocks(); blockViewDirty = true; });
+
+        // ---- block list (2 columns, scrollable, only visible rows are drawn) ----
+        List<BlockESP.BlockInfo> list = blockView(esp);
+        final float gridX = 716, gridY = 432, gridW = 666, viewBottom = 800, gap = 8, rh = 26, rg = 6;
+        final float cw = (gridW - gap) / 2f;
+        int rows = (int) Math.ceil(list.size() / 2.0);
+        float contentH = rows * (rh + rg);
+        float viewH = viewBottom - gridY;
+        float maxScroll = Math.max(0, contentH - viewH);
+        lastMaxScroll = maxScroll;
+        scrollTarget = Math.max(0, Math.min(maxScroll, scrollTarget));
+        scroll += (scrollTarget - scroll) * scrollK;
+        if (Math.abs(scrollTarget - scroll) < 0.2f) scroll = scrollTarget;
+        scroll = Math.max(0, Math.min(maxScroll, scroll));
+
+        int clipTop = Y(gridY), clipBottom = Y(viewBottom);
+        c.enableScissor(X(710), clipTop, X(1390), clipBottom);
+        clipT = clipTop; clipB = clipBottom;
+        try {
+            for (int i = 0; i < list.size(); i++) {
+                int r = i / 2, col = i % 2;
+                float y1 = gridY + r * (rh + rg) - scroll;
+                float y2 = y1 + rh;
+                if (y2 < gridY - 4 || y1 > viewBottom + 4) continue; // off-screen: no work at all
+
+                final BlockESP.BlockInfo bi = list.get(i);
+                float x1 = gridX + col * (cw + gap), x2 = x1 + cw;
+                boolean sel = esp.has(bi.id());
+                boolean hov = inRect(mx, my, X(x1), Y(y1), X(x2), Y(y2));
+                float hc = hover("blk:" + bi.id(), hov);
+                float on = hover("bsel:" + bi.id(), sel);
+                float strong = Math.max(on, hc);
+
+                glass(c, X(x1), Y(y1), X(x2), Y(y2), radius(8, 2), on * 0.35f + hc * 0.35f,
+                        lerpRgb(lerpRgb(Theme.BORDER, Theme.PURPLE, hc), Theme.PURPLE_LIGHT, on), 0.55f + 0.40f * strong,
+                        lerpRgb(0x1C1C26, 0x2B1F4D, on), lerpRgb(0x12121A, 0x180F30, on), 0.95f);
+
+                String tag = sel ? "ADDED" : "+ ADD";
+                float tagW = tw(tag, 10);
+                String nm = bi.name();
+                boolean cut = false;
+                while (nm.length() > 3 && tw(nm, 12) > cw - tagW - 26) { nm = nm.substring(0, nm.length() - 1); cut = true; }
+                if (cut) nm += "..";
+                txt(c, nm, x1 + 9, y1 + (rh - 12) / 2f, 12, lerpRgb(0xD0D0DC, 0xFFFFFF, strong), 1f);
+                txt(c, tag, x2 - tagW - 9, y1 + (rh - 10) / 2f, 10, sel ? Theme.PURPLE_LIGHT : Theme.MUTED, 1f);
+
+                addHit(X(x1), Y(y1), X(x2), Y(y2), () -> { esp.toggleBlock(bi.id()); blockViewDirty = true; });
+            }
+        } finally {
+            c.disableScissor();
+            clipT = Integer.MIN_VALUE; clipB = Integer.MAX_VALUE;
+        }
+
+        if (maxScroll > 0) {
+            int sbX1 = X(1392), sbX2 = X(1397), sbY1 = Y(gridY), sbY2 = Y(viewBottom);
+            Theme.rrect(c, sbX1, sbY1, sbX2, sbY2, 2, Theme.argb(0.4f * cur, Theme.BORDER));
+            float ratio = viewH / contentH;
+            int thumbH = Math.max(18, Math.round((sbY2 - sbY1) * ratio));
+            int thumbY = sbY1 + Math.round(((sbY2 - sbY1) - thumbH) * (scroll / maxScroll));
+            Theme.rrect(c, sbX1 - 1, thumbY - 1, sbX2 + 1, thumbY + thumbH + 1, 3, Theme.argb(0.18f * cur, Theme.PURPLE));
+            Theme.rrect(c, sbX1, thumbY, sbX2, thumbY + thumbH, 2, Theme.argb(0.9f * cur, Theme.PURPLE));
+        }
+
+        if (list.isEmpty()) {
+            txt(c, onlySelected ? "No blocks selected yet." : "No blocks found matching your search.", 720, 450, 16, Theme.MUTED, 1f);
+        }
     }
 
     // =====================================================================
@@ -600,7 +748,7 @@ public class VoidScreen extends Screen {
     }
 
     @Override public boolean mouseScrolled(double mx, double my, double horizontalAmount, double verticalAmount) {
-        if (nav == Nav.ALL_MODS) {
+        if (nav == Nav.ALL_MODS || nav == Nav.BLOCKESP) {
             scrollTarget = Math.max(0f, Math.min(lastMaxScroll, scrollTarget - (float) (verticalAmount * 34f)));
         }
         return true;
