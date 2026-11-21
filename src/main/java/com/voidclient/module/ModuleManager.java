@@ -33,6 +33,7 @@ public final class ModuleManager {
     public static final ArrayDeque<Long> LMB = new ArrayDeque<>(), RMB = new ArrayDeque<>();
 
     private static Module fullbright, gamma, crosshair, seeInvisibles, itemEsp, mobEsp, playerEsp, memoryOpt, animOpt;
+    private static Module combatTimerMod, lastDamageMod, dmgIndMod, nearbyMod;
     private static final List<Module> particleCutters = new ArrayList<>();
     private static final Random RNG = new Random();
 
@@ -41,14 +42,25 @@ public final class ModuleManager {
     private static boolean wasL, wasR, wasInWorld;
     private static int savedMaxFps = -1;
 
+    // ---- config save debounce ----
+    private static final long SAVE_DEBOUNCE_MS = 600L;
+    private static boolean saveDirty;
+    private static long saveDueAt;
+
+    // ---- crash protection ----
+    private static final int MAX_ERRORS = 5;
+    private static final IdentityHashMap<Module, Integer> ERRORS = new IdentityHashMap<>();
+
     private static <T extends Module> T add(T m) { ALL.add(m); return m; }
     private static LineHud hud(String id, String name, String desc, Category c, boolean en, int x, int y,
                                Function<MinecraftClient, List<String>> f) {
         return add(new LineHud(id, name, desc, c, en, x, y, f));
     }
 
+    private static boolean on(Module m) { return m != null && m.enabled(); }
+
     public static void init() {
-        ALL.clear(); particleCutters.clear();
+        ALL.clear(); particleCutters.clear(); ERRORS.clear();
 
         // ---------- HUD ----------
         hud("fps", "FPS Counter", "แสดง FPS", HUD, true, 6, 6, mc -> List.of("FPS  " + mc.getCurrentFps()));
@@ -72,13 +84,13 @@ public final class ModuleManager {
         add(new Special.Potion());
 
         // ---------- VISUAL ----------
-                add(new Toggle("voidcape", "Void Cape", "ผ้าคลุมลาย VOID สีม่วง-ดำบนหลังตัวละคร", VISUAL, true, null));
+        add(new Toggle("voidcape", "Void Cape", "ผ้าคลุมลาย VOID สีม่วง-ดำบนหลังตัวละคร", VISUAL, true, null));
         add(new Toggle("voidwings", "Void Wings", "ปีกสีม่วงเรืองแสงบนหลังตัวละคร (ขยับตามการเคลื่อนไหว)", VISUAL, true, null));
 
-             seeInvisibles = add(new Toggle("seeinvisibles", "See Invisibles", "มองเห็นผู้เล่นที่ดื่มยาล่องหน", VISUAL, false, null));
-     itemEsp = add(new Toggle("itemesp", "Item ESP", "แสดงเส้นขอบเรืองแสงให้สิ่งของที่ตกพื้น", VISUAL, false, null));
-     mobEsp = add(new Toggle("mobesp", "Entity / Mob ESP", "แสดงเส้นขอบเรืองแสงให้สัตว์และมอนสเตอร์", VISUAL, false, null));
-     playerEsp = add(new Toggle("playeresp", "Player ESP", "แสดงเส้นขอบเรืองแสงให้ผู้เล่นอื่น", VISUAL, false, null));
+        seeInvisibles = add(new Toggle("seeinvisibles", "See Invisibles", "มองเห็นผู้เล่นที่ดื่มยาล่องหน", VISUAL, false, null));
+        itemEsp = add(new Toggle("itemesp", "Item ESP", "แสดงเส้นขอบเรืองแสงให้สิ่งของที่ตกพื้น", VISUAL, false, null));
+        mobEsp = add(new Toggle("mobesp", "Entity / Mob ESP", "แสดงเส้นขอบเรืองแสงให้สัตว์และมอนสเตอร์", VISUAL, false, null));
+        playerEsp = add(new Toggle("playeresp", "Player ESP", "แสดงเส้นขอบเรืองแสงให้ผู้เล่นอื่น", VISUAL, false, null));
 
         fullbright = add(new Toggle("fullbright", "Fullbright", "เพิ่มความสว่างในพื้นที่มืด", VISUAL, false, null));
         gamma = add(new Toggle("gamma", "Gamma Control", "ปรับระดับความสว่าง", VISUAL, false, null))
@@ -158,7 +170,7 @@ public final class ModuleManager {
                 .with(new Setting("keep", "Keep %", 0f, 1f, 0.25f)));
         particleCutters.add(add(new Toggle("explosionvisual", "Crystal Explosion Visual", "ปรับความหนาแน่นเอฟเฟกต์ระเบิด", CRYSTAL, false, null))
                 .with(new Setting("keep", "Intensity", 0f, 1f, 0.5f)));
-        hud("lastdamage", "Crystal Damage Display", "ดาเมจล่าสุดที่ได้รับ (HUD)", CRYSTAL, false, 260, 66, mc ->
+        lastDamageMod = hud("lastdamage", "Crystal Damage Display", "ดาเมจล่าสุดที่ได้รับ (HUD)", CRYSTAL, false, 260, 66, mc ->
                 dmgTicks > 0 ? List.of(String.format("-%.1f HP", lastDamage)) : List.of());
         add(new Toggle("crystalrender", "Crystal Render Optimizer", "ลด Entity distance ระหว่างสู้ (ภาพเท่านั้น)", CRYSTAL, false, on -> {
             var o = MinecraftClient.getInstance().options;
@@ -186,7 +198,7 @@ public final class ModuleManager {
                 return List.of(le.getName().getString(), String.format("HP  %.1f / %.1f", le.getHealth(), le.getMaxHealth()));
             return List.of();
         });
-        hud("combattimer", "Combat Timer", "ตัวจับเวลาหลังสู้", COMBAT, false, 380, 72, mc ->
+        combatTimerMod = hud("combattimer", "Combat Timer", "ตัวจับเวลาหลังสู้", COMBAT, false, 380, 72, mc ->
                 combatTicks > 0 ? List.of(String.format("Combat  %.1fs", combatTicks / 20f)) : List.of());
         hud("cooldown", "Item Cooldown Display", "คูลดาวน์ Pearl / Gapple / Shield", COMBAT, false, 380, 90, mc -> {
             if (mc.player == null) return List.of();
@@ -205,9 +217,9 @@ public final class ModuleManager {
                 out.add(Enchantment.getName(e.getKey(), e.getIntValue()).getString());
             return out;
         });
-        hud("nearby", "Surrounding Entity Counter", "จำนวน Entity รอบตัว 16 บล็อก", COMBAT, false, 380, 190, mc ->
+        nearbyMod = hud("nearby", "Surrounding Entity Counter", "จำนวน Entity รอบตัว 16 บล็อก", COMBAT, false, 380, 190, mc ->
                 List.of("Nearby  " + nearby));
-        hud("dmgind", "Custom Damage Indicators", "ตัวเลขดาเมจที่ได้รับ", COMBAT, false, 380, 208, mc ->
+        dmgIndMod = hud("dmgind", "Custom Damage Indicators", "ตัวเลขดาเมจที่ได้รับ", COMBAT, false, 380, 208, mc ->
                 dmgTicks > 0 ? List.of(String.format("-%.1f", lastDamage)) : List.of());
         add(new Toggle("pvpperf", "PVP Performance", "ลด Particle/เงา ระหว่างสู้เพื่อลด FPS drop", COMBAT, false, on -> {
             var o = MinecraftClient.getInstance().options;
@@ -216,37 +228,85 @@ public final class ModuleManager {
         }));
     }
 
+    // ---------- config save (debounced) ----------
+
+    /** Request a config save. Real write happens after a short quiet period (avoids disk spam / frame hitches). */
+    public static void requestSave() {
+        saveDirty = true;
+        saveDueAt = System.currentTimeMillis() + SAVE_DEBOUNCE_MS;
+    }
+
+    /** Write the config immediately if a save is pending (call when closing screens / leaving the game). */
+    public static void flushSave() {
+        if (!saveDirty) return;
+        saveDirty = false;
+        try { VoidConfig.save(); }
+        catch (Throwable t) { System.err.println("[VOID] config save failed: " + t); }
+    }
+
+    // ---------- crash protection ----------
+
+    private static void fail(Module m, String where, Throwable t) {
+        int n = ERRORS.merge(m, 1, Integer::sum);
+        if (n == 1) System.err.println("[VOID] " + where + " error in " + m.id + ": " + t);
+        if (n >= MAX_ERRORS) {
+            ERRORS.remove(m);
+            try { m.setEnabled(false); } catch (Throwable ignored) {}
+            requestSave();
+            System.err.println("[VOID] auto-disabled '" + m.id + "' after repeated " + where + " errors");
+        }
+    }
 
     // ---------- runtime ----------
     public static void tick(MinecraftClient mc) {
+        if (saveDirty && System.currentTimeMillis() >= saveDueAt) flushSave();
+
         boolean inWorld = mc.world != null;
 
-        if (wasInWorld && !inWorld && memoryOpt != null && memoryOpt.enabled()) System.gc();
+        if (wasInWorld && !inWorld && on(memoryOpt)) System.gc();
         wasInWorld = inWorld;
 
-        for (Module m : ALL) if (m.enabled()) {
-            try { m.tick(mc); } catch (Throwable t) { System.err.println("[VOID] tick error in " + m.id + ": " + t); }
+        // disabled modules are skipped immediately: zero work for anything that is OFF
+        for (int i = 0, n = ALL.size(); i < n; i++) {
+            Module m = ALL.get(i);
+            if (!m.enabled()) continue;
+            try { m.tick(mc); } catch (Throwable t) { fail(m, "tick", t); }
         }
+
         PlayerEntity p = mc.player;
         if (p == null || mc.world == null) { prevHealth = -1f; return; }
 
-        float hp = p.getHealth() + p.getAbsorptionAmount();
-        if (prevHealth >= 0 && hp < prevHealth) { lastDamage = prevHealth - hp; dmgTicks = 60; combatTicks = 200; }
-        prevHealth = hp;
-        if (p.hurtTime > 0) combatTicks = 200;
-        if (mc.options.attackKey.isPressed() && mc.targetedEntity instanceof LivingEntity) combatTicks = 200;
-        if (combatTicks > 0) combatTicks--;
-        if (dmgTicks > 0) dmgTicks--;
-        if (p.age % 10 == 0)
+        // combat/damage tracking only runs while a HUD that needs it is enabled
+        if (on(combatTimerMod) || on(lastDamageMod) || on(dmgIndMod)) {
+            float hp = p.getHealth() + p.getAbsorptionAmount();
+            if (prevHealth >= 0 && hp < prevHealth) { lastDamage = prevHealth - hp; dmgTicks = 60; combatTicks = 200; }
+            prevHealth = hp;
+            if (p.hurtTime > 0) combatTicks = 200;
+            if (mc.options.attackKey.isPressed() && mc.targetedEntity instanceof LivingEntity) combatTicks = 200;
+            if (combatTicks > 0) combatTicks--;
+            if (dmgTicks > 0) dmgTicks--;
+        } else {
+            prevHealth = -1f; combatTicks = 0; dmgTicks = 0;
+        }
+
+        // entity scan only while its HUD is enabled
+        if (on(nearbyMod) && p.age % 10 == 0)
             nearby = mc.world.getEntitiesByClass(LivingEntity.class, p.getBoundingBox().expand(16), e -> e != p).size();
     }
 
     public static void renderHud(DrawContext c, MinecraftClient mc) {
         if (mc.player == null) return;
         pollClicks(mc);
-        for (Module m : ALL) if (m.enabled()) {
-            try { m.render(c, mc); } catch (Throwable t) { System.err.println("[VOID] render error in " + m.id + ": " + t); }
+        for (int i = 0, n = ALL.size(); i < n; i++) {
+            Module m = ALL.get(i);
+            if (!m.enabled()) continue;
+            try { m.render(c, mc); } catch (Throwable t) { fail(m, "render", t); }
         }
+    }
+
+    private static void prune(ArrayDeque<Long> q, long now) {
+        Long f;
+        while ((f = q.peekFirst()) != null && now - f > 1000) q.pollFirst();
     }
 
     private static void pollClicks(MinecraftClient mc) {
@@ -257,11 +317,13 @@ public final class ModuleManager {
         if (l && !wasL) LMB.add(now);
         if (r && !wasR) RMB.add(now);
         wasL = l; wasR = r;
+        // keep the queues bounded even when no CPS HUD is enabled
+        prune(LMB, now);
+        prune(RMB, now);
     }
 
     public static int cps(ArrayDeque<Long> q) {
-        long now = System.currentTimeMillis();
-        q.removeIf(t -> now - t > 1000);
+        prune(q, System.currentTimeMillis());
         return q.size();
     }
 
@@ -277,9 +339,11 @@ public final class ModuleManager {
     public static boolean itemEspOn() { return itemEsp != null && itemEsp.enabled(); }
     public static boolean mobEspOn() { return mobEsp != null && mobEsp.enabled(); }
     public static boolean playerEspOn() { return playerEsp != null && playerEsp.enabled(); }
-        public static boolean dropParticle(ParticleEffect effect) {
+
+    public static boolean dropParticle(ParticleEffect effect) {
         if (effect.getType() == ParticleTypes.EXPLOSION || effect.getType() == ParticleTypes.EXPLOSION_EMITTER) {
-            for (Module m : particleCutters) {
+            for (int i = 0, n = particleCutters.size(); i < n; i++) {
+                Module m = particleCutters.get(i);
                 if (m.enabled() && RNG.nextFloat() > m.val("keep", 0.25f)) return true;
             }
         }
@@ -314,21 +378,42 @@ public final class ModuleManager {
         o.getEntityDistanceScaling().setValue((double) m.val("ed", 1f));
     }
 
+    /** Which CPvP preset is currently active: "CRYSTAL", "ANCHOR" or "" (none / mixed). */
+    public static String activeCpvp() {
+        boolean hasC = false, hasA = false, cAll = true, aAll = true, cAny = false, aAny = false;
+        for (int i = 0, n = ALL.size(); i < n; i++) {
+            Module m = ALL.get(i);
+            if (m.cat == CRYSTAL) { hasC = true; if (m.enabled()) cAny = true; else cAll = false; }
+            else if (m.cat == ANCHOR) { hasA = true; if (m.enabled()) aAny = true; else aAll = false; }
+        }
+        if (hasC && cAll && !aAny) return "CRYSTAL";
+        if (hasA && aAll && !cAny) return "ANCHOR";
+        return "";
+    }
+
     public static void cpvpPreset(boolean crystal) {
         for (Module m : ALL) {
-            if (m.cat == CRYSTAL) m.setEnabled(crystal);
-            if (m.cat == ANCHOR) m.setEnabled(!crystal);
+            try {
+                if (m.cat == CRYSTAL) m.setEnabled(crystal);
+                if (m.cat == ANCHOR) m.setEnabled(!crystal);
+            } catch (Throwable t) {
+                System.err.println("[VOID] preset error on " + m.id + ": " + t);
+            }
         }
-        VoidConfig.save();
+        requestSave();
     }
 
     public static void resetAll() {
         for (Module m : ALL) {
-            m.setEnabled(false);
-            m.s.scale = 1f;
-            m.s.opacity = 0.85f;
+            try {
+                m.setEnabled(false);
+                m.s.scale = 1f;
+                m.s.opacity = 0.85f;
+            } catch (Throwable t) {
+                System.err.println("[VOID] reset error on " + m.id + ": " + t);
+            }
         }
-        VoidConfig.save();
+        requestSave();
     }
 
     public static boolean sodiumLoaded() {
