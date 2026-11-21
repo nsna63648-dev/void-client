@@ -7,6 +7,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -360,7 +361,7 @@ public final class BlockESP extends Module {
         int lineCol = argb(r, g, b, 0.90f);
 
         // ทุกอย่างวาดเป็น quad ใน layer เดียว (ไม่พึ่ง VertexRendering / lines layer ที่เปลี่ยนใน 1.21.11)
-        VertexConsumer vc = vcp.getBuffer(RenderLayers.getDebugQuads());
+        VertexConsumer vc = vcp.getBuffer(quadLayer());
 
         Vec3d look = mc.player.getRotationVec(1f);
         float ox = (float) look.x * 0.5f, oy = (float) look.y * 0.5f, oz = (float) look.z * 0.5f;
@@ -413,6 +414,11 @@ public final class BlockESP extends Module {
                 ribbon(vc, m, lineCol, ox, oy, oz, cx, cy, cz, hw);
             }
         }
+    }
+
+    /** จุดเดียวที่ผูกกับชื่อ layer ของ 1.21.11 (QUADS + POSITION_COLOR + โปร่งแสง) ถ้าชื่อไม่ตรงแก้ที่นี่ที่เดียว */
+    private static RenderLayer quadLayer() {
+        return RenderLayers.debugQuads();
     }
 
     private static int argb(float r, float g, float b, float a) {
